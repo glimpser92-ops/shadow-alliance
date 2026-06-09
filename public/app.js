@@ -39,12 +39,14 @@ let mode = "home";
 let roomCode = null;
 let teacherToken = null;
 let playerId = null;
+const deviceId = getDeviceId();
 let appConfig = null;
 let qrDataUrl = null;
 let qrForUrl = null;
 let soundOn = localStorage.getItem("shadow:sound") !== "off";
 let toastTimer = null;
 let ruleIndex = 0;
+let sceneMotion = "";
 
 init();
 
@@ -77,7 +79,11 @@ function init() {
 
 socket.on("room:state", ({ event, state: nextState }) => {
   state = nextState;
-  if (event === "start" || event === "result" || event === "final") playTone(event);
+  if (event === "start" || event === "result" || event === "final") {
+    sceneMotion = event;
+    showStageTransition(event, nextState);
+    playTone(event);
+  }
   render();
 });
 
@@ -207,7 +213,7 @@ function bindHome() {
 }
 
 function createRoom(settings) {
-  emit("room:create", settings).then((payload) => {
+  emit("room:create", { settings, deviceId }).then((payload) => {
     localStorage.setItem(`shadow:teacher:${payload.code}`, payload.teacherToken);
     localStorage.setItem(
       "shadow:lastTeacher",
@@ -231,7 +237,8 @@ async function watchRoom() {
   const payload = await emit("room:watch", {
     code: roomCode,
     teacherToken,
-    role: "teacher"
+    role: "teacher",
+    deviceId
   });
   state = payload.state;
   if (payload.role !== "teacher") {
@@ -246,7 +253,20 @@ async function watchRoom() {
 
 async function joinRoom() {
   if (!roomCode) return;
-  const payload = await emit("student:join", { code: roomCode, playerId });
+  const payload = await emit("student:join", { code: roomCode, playerId, deviceId });
+  if (payload.blockedAsTeacher) {
+    localStorage.removeItem(`shadow:player:${roomCode}`);
+    const token = localStorage.getItem(`shadow:teacher:${roomCode}`);
+    if (token) {
+      window.location.replace(`/teacher/${roomCode}?t=${token}`);
+      return;
+    }
+    mode = "teacher";
+    state = payload.state;
+    showToast("교사 기기는 학생 명단에 등록되지 않습니다.");
+    renderTeacher();
+    return;
+  }
   playerId = payload.playerId;
   localStorage.setItem(`shadow:player:${roomCode}`, playerId);
   state = payload.state;
@@ -266,13 +286,15 @@ async function renderTeacher() {
     qrForUrl = joinUrl;
     loadQr(joinUrl);
   }
+  const sceneClass = consumeSceneClass();
   app.innerHTML = `
     ${teacherHeader()}
-    <main class="teacher-layout">
+    <main class="teacher-layout ${sceneClass}">
       ${state.status === "lobby" ? teacherLobby(joinUrl) : ""}
       ${state.status === "round" ? teacherRound() : ""}
       ${state.status === "result" ? teacherResult() : ""}
       ${state.status === "final" ? finalView(true) : ""}
+      ${state.status !== "lobby" && state.status !== "final" ? teacherJoinPanel(joinUrl) : ""}
       ${state.status !== "final" ? rosterPanel() : ""}
     </main>
   `;
@@ -289,6 +311,22 @@ function teacherHeader() {
         <button class="btn ghost" data-action="home">처음으로</button>
       </div>
     </header>
+  `;
+}
+
+function teacherJoinPanel(joinUrl) {
+  return `
+    <section class="panel join-panel">
+      <div>
+        <div class="eyebrow">중간 입장</div>
+        <strong class="gold">방 ${state.code}</strong>
+        <p class="muted">라운드 중에도 학생은 QR 또는 주소로 들어와 바로 숫자를 제출할 수 있습니다.</p>
+      </div>
+      <div class="join-panel-right">
+        <div class="qr compact">${qrDataUrl ? `<img alt="학생 입장 QR" src="${qrDataUrl}">` : ""}</div>
+        <button class="join-url compact-url" data-action="copy-url">${joinUrl}</button>
+      </div>
+    </section>
   `;
 }
 
@@ -437,13 +475,25 @@ function bindTeacher() {
     window.location.href = "/";
   });
   app.querySelector('[data-action="sound"]')?.addEventListener("click", toggleSound);
-  app.querySelector('[data-action="copy-url"]')?.addEventListener("click", async (event) => {
-    try {
-      await navigator.clipboard.writeText(event.currentTarget.textContent.trim());
-      showToast("학생 입장 주소를 복사했습니다.");
-    } catch {
-      showToast("주소를 선택해서 복사할 수 있습니다.");
-    }
+  app.querySelector('[data-action="new-game"]')?.addEventListener("click", () => {
+    const nextSettings = state?.settings || {
+      totalRounds: 5,
+      directiveMin: 30,
+      directiveMax: 70,
+      roundSeconds: 300
+    };
+    showToast("새 방을 여는 중입니다.");
+    createRoom(nextSettings);
+  });
+  app.querySelectorAll('[data-action="copy-url"]').forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      try {
+        await navigator.clipboard.writeText(event.currentTarget.textContent.trim());
+        showToast("학생 입장 주소를 복사했습니다.");
+      } catch {
+        showToast("주소를 선택해서 복사할 수 있습니다.");
+      }
+    });
   });
   app.querySelectorAll('[data-action="start-round"]').forEach((button) => {
     button.addEventListener("click", () => teacherEmit("teacher:startRound"));
@@ -529,12 +579,13 @@ function renderStudent() {
     `;
     return;
   }
+  const sceneClass = consumeSceneClass();
   app.innerHTML = `
     <header class="topbar">
       <div class="brand brand-small">${sigil()} <span>SHADOW ALLIANCE</span></div>
     </header>
     ${secretTabs()}
-    <main class="student-main">
+    <main class="student-main ${sceneClass}">
       ${state.status === "lobby" ? studentLobby() : ""}
       ${state.status === "round" ? studentRound() : ""}
       ${state.status === "result" ? studentResult() : ""}
@@ -647,7 +698,9 @@ function bindStudent() {
     });
   }
   app.querySelector('[data-action="submit-number"]')?.addEventListener("click", () => {
-    const value = Number(app.querySelector('[data-input="number"]').value);
+    const input = app.querySelector('[data-input="number"]');
+    const value = clamp(Math.round(Number(input.value)), 1, 100);
+    input.value = value;
     emit("student:submit", {
       code: state.code,
       playerId,
@@ -658,6 +711,13 @@ function bindStudent() {
       renderStudent();
     });
   });
+}
+
+function consumeSceneClass() {
+  if (!sceneMotion) return "";
+  const className = `scene-enter scene-${sceneMotion}`;
+  sceneMotion = "";
+  return className;
 }
 
 function bindSecrets() {
@@ -707,7 +767,7 @@ function finalView(isTeacher) {
       </div>
       ${
         isTeacher
-          ? `<div class="actions" style="justify-content:center; margin-top:22px"><button class="btn primary" data-action="home">새 게임 시작</button></div>`
+          ? `<div class="actions" style="justify-content:center; margin-top:22px"><button class="btn primary" data-action="new-game">새 게임 시작</button></div>`
           : ""
       }
     </section>
@@ -816,6 +876,19 @@ function emit(event, payload) {
   });
 }
 
+function getDeviceId() {
+  const key = "shadow:deviceId";
+  let value = localStorage.getItem(key);
+  if (!value) {
+    value =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `device-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    localStorage.setItem(key, value);
+  }
+  return value;
+}
+
 function formatTimer(ms) {
   const total = Math.ceil(Math.max(0, ms) / 1000);
   const minutes = Math.floor(total / 60);
@@ -857,6 +930,40 @@ function showToast(message) {
   }
   toast.textContent = message;
   toastTimer = setTimeout(() => toast.remove(), 2400);
+}
+
+function showStageTransition(event, nextState) {
+  const labels = {
+    start: {
+      eyebrow: `ROUND ${nextState.currentRound} / ${nextState.settings.totalRounds}`,
+      title: "지령 공개",
+      detail: String(nextState.directive ?? "")
+    },
+    result: {
+      eyebrow: `ROUND ${nextState.currentRound} 종료`,
+      title: "결과 공개",
+      detail: nextState.result?.winnerTeam ? TEAMS[nextState.result.winnerTeam].label : "교착"
+    },
+    final: {
+      eyebrow: "FINAL",
+      title: "최종 시상",
+      detail: "세력 공개"
+    }
+  };
+  const label = labels[event];
+  if (!label) return;
+  document.querySelector(".stage-transition")?.remove();
+  const overlay = document.createElement("div");
+  overlay.className = `stage-transition stage-${event}`;
+  overlay.innerHTML = `
+    <div class="stage-transition-inner">
+      <div class="eyebrow">${label.eyebrow}</div>
+      <div class="stage-title">${label.title}</div>
+      <div class="stage-detail">${escapeHtml(label.detail)}</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.remove(), 1400);
 }
 
 function toggleSound() {

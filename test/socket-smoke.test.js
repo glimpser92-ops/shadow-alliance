@@ -66,6 +66,34 @@ function emit(socket, event, payload) {
     assert.strictEqual(started.state.status, "round");
     assert.strictEqual(started.state.directive, 50);
 
+    const lateSocket = await connect();
+    sockets.push(lateSocket);
+    const lateJoin = await emit(lateSocket, "student:join", {
+      code,
+      deviceId: "late-student-device"
+    });
+    assert.strictEqual(lateJoin.state.status, "round");
+    assert.ok(lateJoin.playerId);
+    assert.ok(["black", "white"].includes(lateJoin.state.personal.team));
+    const lateFirstSubmit = await emit(lateSocket, "student:submit", {
+      code,
+      playerId: lateJoin.playerId,
+      value: 17
+    });
+    assert.strictEqual(lateFirstSubmit.state.personal.currentSubmission, 17);
+    const lateFinalValue = lateJoin.state.personal.team === "black" ? 50 : 100;
+    const lateSecondSubmit = await emit(lateSocket, "student:submit", {
+      code,
+      playerId: lateJoin.playerId,
+      value: lateFinalValue
+    });
+    assert.strictEqual(lateSecondSubmit.state.personal.currentSubmission, lateFinalValue);
+    students.push({
+      socket: lateSocket,
+      playerId: lateJoin.playerId,
+      team: lateJoin.state.personal.team
+    });
+
     for (const student of students) {
       await emit(student.socket, "student:submit", {
         code,
@@ -87,25 +115,57 @@ function emit(socket, event, payload) {
     assert.strictEqual(finalized.state.status, "final");
     assert.ok(finalized.state.final.rankings.length >= 4);
 
+    const nextGame = await emit(teacher, "room:create", {
+      deviceId: "same-teacher-after-final",
+      settings: finalized.state.settings
+    });
+    assert.notStrictEqual(nextGame.code, code);
+    assert.strictEqual(nextGame.state.status, "lobby");
+    assert.strictEqual(nextGame.state.currentRound, 0);
+    assert.strictEqual(nextGame.state.players.length, 0);
+
     const cleanupTeacher = await connect();
     sockets.push(cleanupTeacher);
     const cleanupRoom = await emit(cleanupTeacher, "room:create", {
-      totalRounds: 1,
-      directiveMin: 50,
-      directiveMax: 50,
-      roundSeconds: 30
+      deviceId: "teacher-device",
+      settings: {
+        totalRounds: 1,
+        directiveMin: 50,
+        directiveMax: 50,
+        roundSeconds: 30
+      }
+    });
+    const blockedTeacherDevice = await connect();
+    sockets.push(blockedTeacherDevice);
+    const blockedJoin = await emit(blockedTeacherDevice, "student:join", {
+      code: cleanupRoom.code,
+      deviceId: "teacher-device"
+    });
+    assert.strictEqual(blockedJoin.blockedAsTeacher, true);
+    assert.strictEqual(blockedJoin.state.players.length, 0);
+
+    const studentRoom = await emit(cleanupTeacher, "room:create", {
+      settings: {
+        totalRounds: 1,
+        directiveMin: 50,
+        directiveMax: 50,
+        roundSeconds: 30
+      }
     });
     const accidental = await connect();
     sockets.push(accidental);
     const accidentalJoin = await emit(accidental, "student:join", {
-      code: cleanupRoom.code
+      code: studentRoom.code,
+      deviceId: "student-device"
     });
     const removed = await emit(cleanupTeacher, "teacher:removePlayer", {
-      code: cleanupRoom.code,
-      teacherToken: cleanupRoom.teacherToken,
+      code: studentRoom.code,
+      teacherToken: studentRoom.teacherToken,
       playerId: accidentalJoin.playerId
     });
     assert.strictEqual(removed.state.players.length, 0);
+    assert.strictEqual(removed.state.code, studentRoom.code);
+    assert.strictEqual(removed.state.status, "lobby");
 
     console.log("socket smoke test passed");
   } finally {

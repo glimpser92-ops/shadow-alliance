@@ -6,7 +6,9 @@ const {
   createRoom,
   endRound,
   joinRoom,
+  isTeacherDevice,
   removePlayer,
+  registerTeacherDevice,
   startRound,
   submitNumber
 } = require("../lib/game");
@@ -77,6 +79,15 @@ function withMathRandom(value, callback) {
   assert.strictEqual(Object.keys(room.players).length, 1);
   removePlayer(room, player.id);
   assert.strictEqual(Object.keys(room.players).length, 0);
+  assert.strictEqual(room.code, "DROP");
+  assert.strictEqual(room.status, "lobby");
+}
+
+{
+  const room = createRoom("TEACHER");
+  registerTeacherDevice(room, "teacher-device");
+  assert.strictEqual(isTeacherDevice(room, "teacher-device"), true);
+  assert.strictEqual(isTeacherDevice(room, "student-device"), false);
 }
 
 console.log("game logic tests passed");

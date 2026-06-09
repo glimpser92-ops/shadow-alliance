@@ -20,6 +20,8 @@ const {
   submitNumber,
   updateSettings,
   adjustRoundTime,
+  isTeacherDevice,
+  registerTeacherDevice,
   removePlayer
 } = require("./lib/game");
 
@@ -75,13 +77,14 @@ app.get("*", (req, res) => {
 });
 
 io.on("connection", (socket) => {
-  socket.on("room:create", (settings, reply) => {
+  socket.on("room:create", (payload = {}, reply) => {
     safeReply(reply, () => {
       const code = makeRoomCode(new Set(rooms.keys()));
+      const { deviceId, settings } = normalizeCreatePayload(payload);
       const room = createRoom(code, settings);
+      registerTeacherDevice(room, deviceId);
       rooms.set(code, room);
-      socket.join(code);
-      sockets.set(socket.id, { code, role: "teacher", teacherToken: room.teacherToken });
+      setSocketRoom(socket, { code, role: "teacher", teacherToken: room.teacherToken, deviceId });
       return {
         code,
         teacherToken: room.teacherToken,
@@ -90,16 +93,17 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("room:watch", ({ code, teacherToken, playerId, role } = {}, reply) => {
+  socket.on("room:watch", ({ code, teacherToken, playerId, role, deviceId } = {}, reply) => {
     safeReply(reply, () => {
       const room = requireRoom(code);
       const normalizedRole = teacherToken === room.teacherToken ? "teacher" : role === "teacher" ? "viewer" : "student";
-      socket.join(room.code);
-      sockets.set(socket.id, {
+      if (normalizedRole === "teacher") registerTeacherDevice(room, deviceId);
+      setSocketRoom(socket, {
         code: room.code,
         role: normalizedRole,
         playerId,
-        teacherToken: normalizedRole === "teacher" ? teacherToken : null
+        teacherToken: normalizedRole === "teacher" ? teacherToken : null,
+        deviceId
       });
       return {
         state: serializeRoom(room, {
@@ -111,12 +115,17 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("student:join", ({ code, playerId } = {}, reply) => {
+  socket.on("student:join", ({ code, playerId, deviceId } = {}, reply) => {
     safeReply(reply, () => {
       const room = requireRoom(code);
-      const player = joinRoom(room, playerId);
-      socket.join(room.code);
-      sockets.set(socket.id, { code: room.code, role: "student", playerId: player.id });
+      if (isTeacherDevice(room, deviceId)) {
+        return {
+          blockedAsTeacher: true,
+          state: serializeRoom(room, { role: "teacher" })
+        };
+      }
+      const player = joinRoom(room, playerId, { deviceId });
+      setSocketRoom(socket, { code: room.code, role: "student", playerId: player.id, deviceId });
       broadcastRoom(room);
       return {
         playerId: player.id,
@@ -241,6 +250,28 @@ function safeReply(reply, handler) {
   } catch (error) {
     if (typeof reply === "function") reply({ ok: false, error: error.message });
   }
+}
+
+function normalizeCreatePayload(payload) {
+  if (payload && Object.prototype.hasOwnProperty.call(payload, "settings")) {
+    return {
+      deviceId: payload.deviceId || null,
+      settings: payload.settings || {}
+    };
+  }
+  return {
+    deviceId: null,
+    settings: payload || {}
+  };
+}
+
+function setSocketRoom(socket, meta) {
+  const previous = sockets.get(socket.id);
+  if (previous?.code && previous.code !== meta.code) {
+    socket.leave(previous.code);
+  }
+  socket.join(meta.code);
+  sockets.set(socket.id, meta);
 }
 
 function requireRoom(code) {
