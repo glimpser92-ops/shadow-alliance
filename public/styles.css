@@ -538,18 +538,30 @@ select:disabled {
   font-size: 14px;
 }
 
+.chip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .mini-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 30px;
-  margin-top: 8px;
   border: 1px solid rgba(226, 125, 115, 0.4);
   border-radius: var(--radius);
   padding: 5px 9px;
   background: rgba(226, 125, 115, 0.08);
   color: #ffd0ca;
   font-size: 13px;
+}
+
+.mini-btn.gold {
+  border-color: rgba(232, 199, 108, 0.48);
+  background: rgba(232, 199, 108, 0.08);
+  color: var(--gold-2);
 }
 
 .student-chip.done {

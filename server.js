@@ -20,6 +20,7 @@ const {
   submitNumber,
   updateSettings,
   adjustRoundTime,
+  excludeTeacherPlayer,
   isTeacherDevice,
   registerTeacherDevice,
   purgeTeacherPlayers,
@@ -122,11 +123,11 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("student:join", ({ code, playerId, deviceId } = {}, reply) => {
+  socket.on("student:join", ({ code, playerId, deviceId, teacherToken } = {}, reply) => {
     safeReply(reply, () => {
       const room = requireRoom(code);
-      if (isTeacherDevice(room, deviceId)) {
-        const removed = purgeTeacherPlayers(room);
+      if (teacherToken === room.teacherToken || isTeacherDevice(room, deviceId)) {
+        const removed = teacherToken === room.teacherToken ? registerTeacherDevice(room, deviceId) : purgeTeacherPlayers(room);
         clearRemovedPlayersSockets(room.code, removed);
         if (removed.length) broadcastRoom(room);
         return {
@@ -218,6 +219,25 @@ io.on("connection", (socket) => {
           id: removed.id,
           nickname: removed.nickname
         },
+        state: serializeRoom(room, { role: "teacher" })
+      };
+    });
+  });
+
+  socket.on("teacher:excludePlayer", ({ code, teacherToken, playerId } = {}, reply) => {
+    safeReply(reply, () => {
+      const room = requireTeacherRoom(code, teacherToken);
+      const removedPlayers = excludeTeacherPlayer(room, playerId);
+      clearRemovedPlayersSockets(room.code, removedPlayers);
+      broadcastRoom(room);
+      const removed = removedPlayers[0] || null;
+      return {
+        removed: removed
+          ? {
+              id: removed.id,
+              nickname: removed.nickname
+            }
+          : null,
         state: serializeRoom(room, { role: "teacher" })
       };
     });

@@ -5,6 +5,7 @@ const {
   calculateRoundResult,
   createRoom,
   endRound,
+  excludeTeacherPlayer,
   getRankings,
   joinRoom,
   isTeacherDevice,
@@ -109,6 +110,27 @@ function withMathRandom(value, callback) {
   assert.strictEqual(serializeRoom(room, { role: "teacher" }).players.length, 1);
   assert.deepStrictEqual(getRankings(room).map((player) => player.id), [student.id]);
   assert.deepStrictEqual(purgeTeacherPlayers(room), []);
+}
+
+{
+  const room = createRoom("EXCLUDE", {
+    directiveMin: 50,
+    directiveMax: 50,
+    roundSeconds: 300,
+    totalRounds: 1
+  });
+  const accidentalTeacher = joinRoom(room, null, { deviceId: "teacher-phone" });
+  withMathRandom(0, () => startRound(room));
+  submitNumber(room, accidentalTeacher.id, 77);
+
+  const removed = excludeTeacherPlayer(room, accidentalTeacher.id);
+
+  assert.strictEqual(removed.length, 1);
+  assert.strictEqual(removed[0].id, accidentalTeacher.id);
+  assert.strictEqual(isTeacherDevice(room, "teacher-phone"), true);
+  assert.strictEqual(room.players[accidentalTeacher.id], undefined);
+  assert.strictEqual(Object.keys(room.rounds[0].submissions).length, 0);
+  assert.throws(() => joinRoom(room, null, { deviceId: "teacher-phone" }), /교사 기기/);
 }
 
 console.log("game logic tests passed");

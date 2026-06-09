@@ -159,6 +159,54 @@ function emit(socket, event, payload) {
     assert.strictEqual(cleanupWatch.state.players.length, 1);
     assert.strictEqual(cleanupWatch.state.players[0].id, cleanupStudentJoin.playerId);
 
+    const tokenCarrier = await connect();
+    sockets.push(tokenCarrier);
+    const tokenBlockedJoin = await emit(tokenCarrier, "student:join", {
+      code: cleanupRoom.code,
+      deviceId: "token-carrying-browser",
+      teacherToken: cleanupRoom.teacherToken
+    });
+    assert.strictEqual(tokenBlockedJoin.blockedAsTeacher, true);
+    assert.strictEqual(tokenBlockedJoin.state.players.length, 1);
+
+    const excludeRoom = await emit(cleanupTeacher, "room:create", {
+      deviceId: "main-teacher-device",
+      settings: {
+        totalRounds: 1,
+        directiveMin: 50,
+        directiveMax: 50,
+        roundSeconds: 30
+      }
+    });
+    const teacherPhone = await connect();
+    sockets.push(teacherPhone);
+    const teacherPhoneJoin = await emit(teacherPhone, "student:join", {
+      code: excludeRoom.code,
+      deviceId: "teacher-phone-device"
+    });
+    await emit(cleanupTeacher, "teacher:startRound", {
+      code: excludeRoom.code,
+      teacherToken: excludeRoom.teacherToken
+    });
+    await emit(teacherPhone, "student:submit", {
+      code: excludeRoom.code,
+      playerId: teacherPhoneJoin.playerId,
+      value: 77
+    });
+    const excluded = await emit(cleanupTeacher, "teacher:excludePlayer", {
+      code: excludeRoom.code,
+      teacherToken: excludeRoom.teacherToken,
+      playerId: teacherPhoneJoin.playerId
+    });
+    assert.strictEqual(excluded.state.status, "round");
+    assert.strictEqual(excluded.state.players.length, 0);
+    const blockedTeacherPhoneAgain = await emit(teacherPhone, "student:join", {
+      code: excludeRoom.code,
+      deviceId: "teacher-phone-device"
+    });
+    assert.strictEqual(blockedTeacherPhoneAgain.blockedAsTeacher, true);
+    assert.strictEqual(blockedTeacherPhoneAgain.state.players.length, 0);
+
     const legacyTeacher = await connect();
     sockets.push(legacyTeacher);
     const legacyRoom = await emit(legacyTeacher, "room:create", {

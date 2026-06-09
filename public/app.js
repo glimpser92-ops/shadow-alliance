@@ -253,7 +253,8 @@ async function watchRoom() {
 
 async function joinRoom() {
   if (!roomCode) return;
-  const payload = await emit("student:join", { code: roomCode, playerId, deviceId });
+  const knownTeacherToken = localStorage.getItem(`shadow:teacher:${roomCode}`);
+  const payload = await emit("student:join", { code: roomCode, playerId, deviceId, teacherToken: knownTeacherToken });
   if (payload.blockedAsTeacher) {
     localStorage.removeItem(`shadow:player:${roomCode}`);
     const token = localStorage.getItem(`shadow:teacher:${roomCode}`);
@@ -455,11 +456,14 @@ function rosterPanel() {
                   <div class="student-chip">
                     <strong>${escapeHtml(player.nickname)}</strong>
                     <span>${player.connected ? "접속 중" : "연결 끊김"} · ${player.power.toLocaleString()} 세력</span>
-                    ${
-                      state.status === "lobby" || state.status === "result"
-                        ? `<button class="mini-btn" data-action="remove-player" data-player-id="${player.id}">명단 제거</button>`
-                        : ""
-                    }
+                    <div class="chip-actions">
+                      <button class="mini-btn gold" data-action="exclude-player" data-player-id="${player.id}">교사 제외</button>
+                      ${
+                        state.status === "lobby" || state.status === "result"
+                          ? `<button class="mini-btn" data-action="remove-player" data-player-id="${player.id}">명단 제거</button>`
+                          : ""
+                      }
+                    </div>
                   </div>
                 `
               )
@@ -512,6 +516,15 @@ function bindTeacher() {
         playerId: button.dataset.playerId
       }).then((payload) => {
         if (payload.removed?.nickname) showToast(`${payload.removed.nickname} 명단에서 제거됨`);
+      });
+    });
+  });
+  app.querySelectorAll('[data-action="exclude-player"]').forEach((button) => {
+    button.addEventListener("click", () => {
+      teacherEmit("teacher:excludePlayer", {
+        playerId: button.dataset.playerId
+      }).then((payload) => {
+        if (payload.removed?.nickname) showToast(`${payload.removed.nickname} 교사 제외 처리됨`);
       });
     });
   });
