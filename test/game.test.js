@@ -5,10 +5,13 @@ const {
   calculateRoundResult,
   createRoom,
   endRound,
+  getRankings,
   joinRoom,
   isTeacherDevice,
+  purgeTeacherPlayers,
   removePlayer,
   registerTeacherDevice,
+  serializeRoom,
   startRound,
   submitNumber
 } = require("../lib/game");
@@ -88,6 +91,24 @@ function withMathRandom(value, callback) {
   registerTeacherDevice(room, "teacher-device");
   assert.strictEqual(isTeacherDevice(room, "teacher-device"), true);
   assert.strictEqual(isTeacherDevice(room, "student-device"), false);
+  assert.throws(() => joinRoom(room, null, { deviceId: "teacher-device" }), /교사 기기/);
+}
+
+{
+  const room = createRoom("PURGE");
+  const accidentalTeacher = joinRoom(room, null, { deviceId: "teacher-device" });
+  const student = joinRoom(room, null, { deviceId: "student-device" });
+  accidentalTeacher.power = 9999;
+  student.power = 100;
+
+  const removed = registerTeacherDevice(room, "teacher-device");
+
+  assert.strictEqual(removed.length, 1);
+  assert.strictEqual(removed[0].id, accidentalTeacher.id);
+  assert.strictEqual(room.players[accidentalTeacher.id], undefined);
+  assert.strictEqual(serializeRoom(room, { role: "teacher" }).players.length, 1);
+  assert.deepStrictEqual(getRankings(room).map((player) => player.id), [student.id]);
+  assert.deepStrictEqual(purgeTeacherPlayers(room), []);
 }
 
 console.log("game logic tests passed");

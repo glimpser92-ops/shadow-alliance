@@ -144,6 +144,59 @@ function emit(socket, event, payload) {
     assert.strictEqual(blockedJoin.blockedAsTeacher, true);
     assert.strictEqual(blockedJoin.state.players.length, 0);
 
+    const cleanupStudent = await connect();
+    sockets.push(cleanupStudent);
+    const cleanupStudentJoin = await emit(cleanupStudent, "student:join", {
+      code: cleanupRoom.code,
+      deviceId: "cleanup-student-device"
+    });
+    const cleanupWatch = await emit(cleanupTeacher, "room:watch", {
+      code: cleanupRoom.code,
+      teacherToken: cleanupRoom.teacherToken,
+      role: "teacher",
+      deviceId: "teacher-device"
+    });
+    assert.strictEqual(cleanupWatch.state.players.length, 1);
+    assert.strictEqual(cleanupWatch.state.players[0].id, cleanupStudentJoin.playerId);
+
+    const legacyTeacher = await connect();
+    sockets.push(legacyTeacher);
+    const legacyRoom = await emit(legacyTeacher, "room:create", {
+      settings: {
+        totalRounds: 1,
+        directiveMin: 50,
+        directiveMax: 50,
+        roundSeconds: 30
+      }
+    });
+    const legacyAccidental = await connect();
+    sockets.push(legacyAccidental);
+    await emit(legacyAccidental, "student:join", {
+      code: legacyRoom.code,
+      deviceId: "legacy-teacher-device"
+    });
+    const cleanedLegacyRoom = await emit(legacyTeacher, "room:watch", {
+      code: legacyRoom.code,
+      teacherToken: legacyRoom.teacherToken,
+      role: "teacher",
+      deviceId: "legacy-teacher-device"
+    });
+    assert.strictEqual(cleanedLegacyRoom.state.players.length, 0);
+    const legacyStudent = await connect();
+    sockets.push(legacyStudent);
+    const legacyStudentJoin = await emit(legacyStudent, "student:join", {
+      code: legacyRoom.code,
+      deviceId: "legacy-student-device"
+    });
+    const watchedLegacyRoom = await emit(legacyTeacher, "room:watch", {
+      code: legacyRoom.code,
+      teacherToken: legacyRoom.teacherToken,
+      role: "teacher",
+      deviceId: "legacy-teacher-device"
+    });
+    assert.strictEqual(watchedLegacyRoom.state.players.length, 1);
+    assert.strictEqual(watchedLegacyRoom.state.players[0].id, legacyStudentJoin.playerId);
+
     const studentRoom = await emit(cleanupTeacher, "room:create", {
       settings: {
         totalRounds: 1,

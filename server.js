@@ -22,6 +22,7 @@ const {
   adjustRoundTime,
   isTeacherDevice,
   registerTeacherDevice,
+  purgeTeacherPlayers,
   removePlayer
 } = require("./lib/game");
 
@@ -97,18 +98,24 @@ io.on("connection", (socket) => {
     safeReply(reply, () => {
       const room = requireRoom(code);
       const normalizedRole = teacherToken === room.teacherToken ? "teacher" : role === "teacher" ? "viewer" : "student";
-      if (normalizedRole === "teacher") registerTeacherDevice(room, deviceId);
+      let removed = [];
+      if (normalizedRole === "teacher") {
+        removed = registerTeacherDevice(room, deviceId);
+        clearRemovedPlayersSockets(room.code, removed);
+      }
+      const normalizedPlayerId = normalizedRole === "teacher" ? null : playerId;
       setSocketRoom(socket, {
         code: room.code,
         role: normalizedRole,
-        playerId,
+        playerId: normalizedPlayerId,
         teacherToken: normalizedRole === "teacher" ? teacherToken : null,
         deviceId
       });
+      if (removed.length) broadcastRoom(room);
       return {
         state: serializeRoom(room, {
           role: normalizedRole,
-          playerId
+          playerId: normalizedPlayerId
         }),
         role: normalizedRole
       };
@@ -119,6 +126,9 @@ io.on("connection", (socket) => {
     safeReply(reply, () => {
       const room = requireRoom(code);
       if (isTeacherDevice(room, deviceId)) {
+        const removed = purgeTeacherPlayers(room);
+        clearRemovedPlayersSockets(room.code, removed);
+        if (removed.length) broadcastRoom(room);
         return {
           blockedAsTeacher: true,
           state: serializeRoom(room, { role: "teacher" })
@@ -270,8 +280,12 @@ function setSocketRoom(socket, meta) {
   if (previous?.code && previous.code !== meta.code) {
     socket.leave(previous.code);
   }
+  const normalizedMeta = {
+    ...meta,
+    playerId: meta.role === "teacher" ? null : meta.playerId || null
+  };
   socket.join(meta.code);
-  sockets.set(socket.id, meta);
+  sockets.set(socket.id, normalizedMeta);
 }
 
 function requireRoom(code) {
@@ -319,6 +333,12 @@ function clearRemovedPlayerSockets(code, playerId) {
         socket.emit("student:removed", { code, playerId });
       }
     }
+  }
+}
+
+function clearRemovedPlayersSockets(code, players = []) {
+  for (const player of players) {
+    clearRemovedPlayerSockets(code, player.id);
   }
 }
 
