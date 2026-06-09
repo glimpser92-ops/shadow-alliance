@@ -33,6 +33,52 @@ const rules = [
   }
 ];
 
+const simulation = {
+  directive: 42,
+  teams: {
+    black: {
+      numbers: [30, 42, 60],
+      average: 44,
+      distance: 2,
+      gains: [2273, 3182, 4545]
+    },
+    white: {
+      numbers: [20, 70, 80],
+      average: 56.7,
+      distance: 14.7,
+      gains: [0, 0, 0]
+    }
+  }
+};
+
+const simulationSteps = [
+  {
+    title: "본부 지령 공개",
+    body: "예시 라운드의 중앙 지령은 42다. 각 연합은 자기 팀 평균을 42에 가깝게 만들려고 협상한다.",
+    phase: "directive"
+  },
+  {
+    title: "각자 숫자 제출",
+    body: "블랙은 30, 42, 60을 냈고 화이트는 20, 70, 80을 냈다. 누가 어느 팀인지는 아직 서로 확실히 모른다.",
+    phase: "submit"
+  },
+  {
+    title: "팀 평균 비교",
+    body: "블랙 평균은 44라서 지령과 2 차이, 화이트 평균은 56.7이라서 14.7 차이다. 그래서 블랙 연합이 라운드를 지배한다.",
+    phase: "average"
+  },
+  {
+    title: "승리팀 세력 분배",
+    body: "블랙 연합만 10,000 세력을 받는다. 블랙 안에서는 더 큰 숫자를 낸 공작원이 더 많은 세력을 가져간다.",
+    phase: "reward"
+  },
+  {
+    title: "갈등의 씨앗 공개",
+    body: "교사 화면에는 승리한 블랙의 제출 숫자만 익명 공개된다. 화이트 숫자는 감춰지고, 현재 순위 Top 5가 이어서 보인다.",
+    phase: "reveal"
+  }
+];
+
 const app = document.querySelector("#app");
 let state = null;
 let mode = "home";
@@ -46,6 +92,8 @@ let qrForUrl = null;
 let soundOn = localStorage.getItem("shadow:sound") !== "off";
 let toastTimer = null;
 let ruleIndex = 0;
+let simulationIndex = 0;
+let showSimulation = false;
 let sceneMotion = "";
 
 init();
@@ -117,22 +165,10 @@ function renderHome() {
     <section class="home-grid">
       <div class="home-card">
         <div class="eyebrow">Briefing · 본부 기밀</div>
-        <h1 class="heading">세계관 & 규칙</h1>
-        ${ruleTrack()}
-        <article class="panel rule-card" data-step="${String(ruleIndex + 1).padStart(2, "0")}">
-          <h2 class="rule-title">${rules[ruleIndex].title}</h2>
-          <div class="rule-body">
-            <p>${rules[ruleIndex].body}</p>
-            ${rules[ruleIndex].formula ? `<div class="formula">${rules[ruleIndex].formula}</div>` : ""}
-          </div>
-        </article>
-        <div class="rule-nav">
-          <button class="btn ghost" data-action="rule-prev" ${ruleIndex === 0 ? "disabled" : ""}>〈 이전</button>
-          <span class="muted">${ruleIndex + 1} / ${rules.length}</span>
-          <button class="btn primary" data-action="${ruleIndex === rules.length - 1 ? "rule-done" : "rule-next"}">
-            ${ruleIndex === rules.length - 1 ? "완료 〉" : "다음 〉"}
-          </button>
-        </div>
+        <h1 class="heading">${showSimulation ? "사례 시뮬레이션" : "세계관 & 규칙"}</h1>
+        ${showSimulation ? simulationTrack() : ruleTrack()}
+        ${showSimulation ? simulationCard() : ruleCard()}
+        ${showSimulation ? simulationNav() : ruleNav()}
       </div>
       <div class="home-card">
         <div class="eyebrow">본부 개설</div>
@@ -180,19 +216,155 @@ function renderHome() {
   bindHome();
 }
 
+function ruleCard() {
+  const rule = rules[ruleIndex];
+  return `
+    <article class="panel rule-card" data-step="${String(ruleIndex + 1).padStart(2, "0")}">
+      <h2 class="rule-title">${rule.title}</h2>
+      <div class="rule-body">
+        <p>${rule.body}</p>
+        ${rule.formula ? `<div class="formula">${rule.formula}</div>` : ""}
+      </div>
+    </article>
+  `;
+}
+
+function ruleNav() {
+  return `
+    <div class="rule-nav">
+      <button class="btn ghost" data-action="rule-prev" ${ruleIndex === 0 ? "disabled" : ""}>〈 이전</button>
+      <span class="muted">${ruleIndex + 1} / ${rules.length}</span>
+      <button class="btn primary" data-action="${ruleIndex === rules.length - 1 ? "simulation-start" : "rule-next"}">
+        ${ruleIndex === rules.length - 1 ? "사례 보기 〉" : "다음 〉"}
+      </button>
+    </div>
+  `;
+}
+
+function simulationCard() {
+  const step = simulationSteps[simulationIndex];
+  return `
+    <article class="panel rule-card simulation-card" data-step="${String(simulationIndex + 1).padStart(2, "0")}">
+      <h2 class="rule-title">${step.title}</h2>
+      <div class="rule-body">
+        <p>${step.body}</p>
+        ${simulationBoard(step.phase)}
+      </div>
+    </article>
+  `;
+}
+
+function simulationBoard(phase) {
+  return `
+    <div class="sim-board phase-${phase}">
+      <div class="sim-directive ${phase === "directive" ? "focus" : ""}">
+        <span>중앙 지령</span>
+        <strong>${simulation.directive}</strong>
+      </div>
+      <div class="sim-teams">
+        ${simulationTeam("black", phase)}
+        ${simulationTeam("white", phase)}
+      </div>
+      ${phase === "reveal" ? simulationReveal() : ""}
+    </div>
+  `;
+}
+
+function simulationTeam(team, phase) {
+  const data = simulation.teams[team];
+  const isWinner = team === "black";
+  const showAverage = ["average", "reward", "reveal"].includes(phase);
+  const showGains = ["reward", "reveal"].includes(phase);
+  return `
+    <section class="sim-team ${team} ${isWinner && showAverage ? "winner" : ""}">
+      <div class="sim-team-head">
+        <span class="team-mark ${team}"></span>
+        <strong>${TEAMS[team].label}</strong>
+      </div>
+      <div class="sim-numbers">
+        ${data.numbers
+          .map(
+            (number, index) => `
+              <div class="sim-number">
+                <span>${number}</span>
+                ${showGains ? `<small>${data.gains[index].toLocaleString()} 세력</small>` : ""}
+              </div>
+            `
+          )
+          .join("")}
+      </div>
+      ${
+        showAverage
+          ? `<div class="sim-average">
+              평균 <strong>${data.average}</strong>
+              <span>지령과 ${data.distance} 차이</span>
+            </div>`
+          : `<p class="muted">협상 중</p>`
+      }
+    </section>
+  `;
+}
+
+function simulationReveal() {
+  const winningNumbers = [...simulation.teams.black.numbers].sort((a, b) => b - a);
+  return `
+    <div class="sim-reveal">
+      <div class="eyebrow">결과 공개</div>
+      <strong>블랙 연합 지배</strong>
+      <div class="numbers">
+        ${winningNumbers.map((number) => `<span class="number-chip">${number}</span>`).join("")}
+      </div>
+      <p class="muted">패배 연합의 숫자는 공개되지 않습니다.</p>
+    </div>
+  `;
+}
+
+function simulationNav() {
+  const isLast = simulationIndex === simulationSteps.length - 1;
+  return `
+    <div class="rule-nav">
+      <button class="btn ghost" data-action="simulation-prev">〈 이전</button>
+      <span class="muted">사례 ${simulationIndex + 1} / ${simulationSteps.length}</span>
+      <button class="btn primary" data-action="${isLast ? "simulation-done" : "simulation-next"}">
+        ${isLast ? "게임 개설하기 〉" : "다음 〉"}
+      </button>
+    </div>
+  `;
+}
+
 function bindHome() {
   app.querySelector('[data-action="show-rules"]')?.addEventListener("click", () => {
     document.querySelector(".home-grid")?.scrollIntoView({ behavior: "smooth" });
   });
   app.querySelector('[data-action="rule-prev"]')?.addEventListener("click", () => {
+    showSimulation = false;
     ruleIndex = Math.max(0, ruleIndex - 1);
     renderHome();
   });
   app.querySelector('[data-action="rule-next"]')?.addEventListener("click", () => {
+    showSimulation = false;
     ruleIndex = Math.min(rules.length - 1, ruleIndex + 1);
     renderHome();
   });
-  app.querySelector('[data-action="rule-done"]')?.addEventListener("click", () => {
+  app.querySelector('[data-action="simulation-start"]')?.addEventListener("click", () => {
+    showSimulation = true;
+    simulationIndex = 0;
+    renderHome();
+  });
+  app.querySelector('[data-action="simulation-prev"]')?.addEventListener("click", () => {
+    if (simulationIndex === 0) {
+      showSimulation = false;
+      ruleIndex = rules.length - 1;
+    } else {
+      simulationIndex -= 1;
+    }
+    renderHome();
+  });
+  app.querySelector('[data-action="simulation-next"]')?.addEventListener("click", () => {
+    simulationIndex = Math.min(simulationSteps.length - 1, simulationIndex + 1);
+    renderHome();
+  });
+  app.querySelector('[data-action="simulation-done"]')?.addEventListener("click", () => {
     document.querySelector('[data-form="create-room"]')?.scrollIntoView({ behavior: "smooth" });
   });
   app.querySelector('[data-action="resume-room"]')?.addEventListener("click", () => {
@@ -841,6 +1013,12 @@ function rankRows(rows) {
 function ruleTrack() {
   return `<div class="rule-track">${rules
     .map((_, index) => `<span class="rule-dot ${index <= ruleIndex ? "active" : ""}"></span>`)
+    .join("")}</div>`;
+}
+
+function simulationTrack() {
+  return `<div class="rule-track">${simulationSteps
+    .map((_, index) => `<span class="rule-dot ${index <= simulationIndex ? "active" : ""}"></span>`)
     .join("")}</div>`;
 }
 

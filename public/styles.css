@@ -305,6 +305,130 @@ select:disabled {
   letter-spacing: 0.08em;
 }
 
+.simulation-card {
+  min-height: 430px;
+}
+
+.sim-board {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.sim-directive,
+.sim-team,
+.sim-reveal {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: rgba(7, 7, 11, 0.5);
+}
+
+.sim-directive {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 86px;
+  padding: 14px 18px;
+}
+
+.sim-directive.focus,
+.sim-team.winner,
+.sim-reveal {
+  border-color: var(--line);
+  background: rgba(232, 199, 108, 0.07);
+}
+
+.sim-directive span,
+.sim-average span,
+.sim-number small {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sim-directive strong {
+  color: var(--gold-2);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 54px;
+  line-height: 1;
+}
+
+.sim-teams {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sim-team {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.sim-team-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--gold-2);
+}
+
+.sim-numbers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.sim-number {
+  display: grid;
+  place-items: center;
+  min-height: 66px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 7px;
+  background: rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+.sim-number span {
+  color: var(--text);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 26px;
+  font-weight: 900;
+}
+
+.sim-number small {
+  display: block;
+  margin-top: 2px;
+  color: var(--gold-2);
+}
+
+.sim-average {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+  color: var(--text);
+}
+
+.sim-average strong {
+  color: var(--gold-2);
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 24px;
+}
+
+.sim-reveal {
+  padding: 14px;
+  text-align: center;
+}
+
+.sim-reveal strong {
+  display: block;
+  color: var(--gold-2);
+  font-size: 24px;
+}
+
 .rule-nav {
   display: flex;
   align-items: center;
@@ -933,8 +1057,15 @@ select:disabled {
   }
 
   .settings-grid,
-  .submission-grid {
+  .submission-grid,
+  .sim-teams {
     grid-template-columns: 1fr;
+  }
+
+  .sim-directive,
+  .sim-average {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .topbar {
