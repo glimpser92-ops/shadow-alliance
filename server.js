@@ -19,7 +19,8 @@ const {
   startRound,
   submitNumber,
   updateSettings,
-  adjustRoundTime
+  adjustRoundTime,
+  removePlayer
 } = require("./lib/game");
 
 const PORT = Number.parseInt(process.env.PORT || "3000", 10);
@@ -187,6 +188,22 @@ io.on("connection", (socket) => {
     });
   });
 
+  socket.on("teacher:removePlayer", ({ code, teacherToken, playerId } = {}, reply) => {
+    safeReply(reply, () => {
+      const room = requireTeacherRoom(code, teacherToken);
+      const removed = removePlayer(room, playerId);
+      clearRemovedPlayerSockets(room.code, playerId);
+      broadcastRoom(room);
+      return {
+        removed: {
+          id: removed.id,
+          nickname: removed.nickname
+        },
+        state: serializeRoom(room, { role: "teacher" })
+      };
+    });
+  });
+
   socket.on("teacher:finalize", ({ code, teacherToken } = {}, reply) => {
     safeReply(reply, () => {
       const room = requireTeacherRoom(code, teacherToken);
@@ -255,6 +272,22 @@ function broadcastRoom(room, event = "state") {
         playerId: meta.playerId
       })
     });
+  }
+}
+
+function clearRemovedPlayerSockets(code, playerId) {
+  for (const [socketId, meta] of sockets.entries()) {
+    if (meta.code === code && meta.playerId === playerId) {
+      sockets.set(socketId, {
+        ...meta,
+        playerId: null,
+        removed: true
+      });
+      const socket = io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit("student:removed", { code, playerId });
+      }
+    }
   }
 }
 

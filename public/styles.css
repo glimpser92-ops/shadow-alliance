@@ -504,6 +504,20 @@ select:disabled {
   font-size: 14px;
 }
 
+.mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  margin-top: 8px;
+  border: 1px solid rgba(226, 125, 115, 0.4);
+  border-radius: var(--radius);
+  padding: 5px 9px;
+  background: rgba(226, 125, 115, 0.08);
+  color: #ffd0ca;
+  font-size: 13px;
+}
+
 .student-chip.done {
   border-color: rgba(143, 211, 161, 0.45);
 }

@@ -62,6 +62,12 @@ function init() {
   if (parts[0] === "join" && parts[1]) {
     mode = "student";
     roomCode = parts[1].toUpperCase();
+    const url = new URL(window.location.href);
+    const teacherTokenForRoom = localStorage.getItem(`shadow:teacher:${roomCode}`);
+    if (teacherTokenForRoom && url.searchParams.get("student") !== "1") {
+      window.location.replace(`/teacher/${roomCode}?t=${teacherTokenForRoom}`);
+      return;
+    }
     playerId = localStorage.getItem(`shadow:player:${roomCode}`);
     joinRoom();
     return;
@@ -73,6 +79,12 @@ socket.on("room:state", ({ event, state: nextState }) => {
   state = nextState;
   if (event === "start" || event === "result" || event === "final") playTone(event);
   render();
+});
+
+socket.on("student:removed", ({ code }) => {
+  if (code) localStorage.removeItem(`shadow:player:${code}`);
+  playerId = null;
+  showToast("명단에서 제거되었습니다.");
 });
 
 socket.on("connect", () => {
@@ -405,6 +417,11 @@ function rosterPanel() {
                   <div class="student-chip">
                     <strong>${escapeHtml(player.nickname)}</strong>
                     <span>${player.connected ? "접속 중" : "연결 끊김"} · ${player.power.toLocaleString()} 세력</span>
+                    ${
+                      state.status === "lobby" || state.status === "result"
+                        ? `<button class="mini-btn" data-action="remove-player" data-player-id="${player.id}">명단 제거</button>`
+                        : ""
+                    }
                   </div>
                 `
               )
@@ -439,6 +456,15 @@ function bindTeacher() {
     teacherEmit("teacher:adjustTime", { deltaSeconds: -30 })
   );
   app.querySelector('[data-action="end-round"]')?.addEventListener("click", () => teacherEmit("teacher:endRound"));
+  app.querySelectorAll('[data-action="remove-player"]').forEach((button) => {
+    button.addEventListener("click", () => {
+      teacherEmit("teacher:removePlayer", {
+        playerId: button.dataset.playerId
+      }).then((payload) => {
+        if (payload.removed?.nickname) showToast(`${payload.removed.nickname} 명단에서 제거됨`);
+      });
+    });
+  });
   app.querySelector('[data-action="finalize"]')?.addEventListener("click", () => teacherEmit("teacher:finalize"));
 }
 
@@ -486,6 +512,21 @@ function renderStudent() {
   app.className = "app-shell student-shell";
   if (!state) {
     app.innerHTML = loading("잠입 중");
+    return;
+  }
+  if (!state.personal) {
+    app.innerHTML = `
+      <header class="topbar">
+        <div class="brand brand-small">${sigil()} <span>SHADOW ALLIANCE</span></div>
+      </header>
+      <section class="panel student-focus">
+        <div>
+          <div class="eyebrow">입장 정보 없음</div>
+          <div class="giant">?</div>
+          <p class="muted">교사 화면에서 명단이 제거되었습니다. 다시 입장하려면 학생 QR을 새로 열어주세요.</p>
+        </div>
+      </section>
+    `;
     return;
   }
   app.innerHTML = `

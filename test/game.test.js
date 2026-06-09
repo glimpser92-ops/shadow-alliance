@@ -6,6 +6,7 @@ const {
   createRoom,
   endRound,
   joinRoom,
+  removePlayer,
   startRound,
   submitNumber
 } = require("../lib/game");
@@ -68,6 +69,14 @@ function withMathRandom(value, callback) {
   const result = calculateRoundResult(room, round);
   assert.strictEqual(result.winnerTeam, null);
   assert.deepStrictEqual(result.gains, {});
+}
+
+{
+  const room = createRoom("DROP");
+  const player = joinRoom(room);
+  assert.strictEqual(Object.keys(room.players).length, 1);
+  removePlayer(room, player.id);
+  assert.strictEqual(Object.keys(room.players).length, 0);
 }
 
 console.log("game logic tests passed");

@@ -87,6 +87,26 @@ function emit(socket, event, payload) {
     assert.strictEqual(finalized.state.status, "final");
     assert.ok(finalized.state.final.rankings.length >= 4);
 
+    const cleanupTeacher = await connect();
+    sockets.push(cleanupTeacher);
+    const cleanupRoom = await emit(cleanupTeacher, "room:create", {
+      totalRounds: 1,
+      directiveMin: 50,
+      directiveMax: 50,
+      roundSeconds: 30
+    });
+    const accidental = await connect();
+    sockets.push(accidental);
+    const accidentalJoin = await emit(accidental, "student:join", {
+      code: cleanupRoom.code
+    });
+    const removed = await emit(cleanupTeacher, "teacher:removePlayer", {
+      code: cleanupRoom.code,
+      teacherToken: cleanupRoom.teacherToken,
+      playerId: accidentalJoin.playerId
+    });
+    assert.strictEqual(removed.state.players.length, 0);
+
     console.log("socket smoke test passed");
   } finally {
     sockets.forEach((socket) => socket.close());
