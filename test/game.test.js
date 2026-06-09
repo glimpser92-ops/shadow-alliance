@@ -9,7 +9,6 @@ const {
   getRankings,
   joinRoom,
   isTeacherDevice,
-  purgeTeacherPlayers,
   removePlayer,
   registerTeacherDevice,
   serializeRoom,
@@ -92,24 +91,10 @@ function withMathRandom(value, callback) {
   registerTeacherDevice(room, "teacher-device");
   assert.strictEqual(isTeacherDevice(room, "teacher-device"), true);
   assert.strictEqual(isTeacherDevice(room, "student-device"), false);
-  assert.throws(() => joinRoom(room, null, { deviceId: "teacher-device" }), /교사 기기/);
-}
-
-{
-  const room = createRoom("PURGE");
-  const accidentalTeacher = joinRoom(room, null, { deviceId: "teacher-device" });
-  const student = joinRoom(room, null, { deviceId: "student-device" });
-  accidentalTeacher.power = 9999;
-  student.power = 100;
-
-  const removed = registerTeacherDevice(room, "teacher-device");
-
-  assert.strictEqual(removed.length, 1);
-  assert.strictEqual(removed[0].id, accidentalTeacher.id);
-  assert.strictEqual(room.players[accidentalTeacher.id], undefined);
+  const sameDeviceStudent = joinRoom(room, null, { deviceId: "teacher-device" });
+  sameDeviceStudent.power = 100;
   assert.strictEqual(serializeRoom(room, { role: "teacher" }).players.length, 1);
-  assert.deepStrictEqual(getRankings(room).map((player) => player.id), [student.id]);
-  assert.deepStrictEqual(purgeTeacherPlayers(room), []);
+  assert.deepStrictEqual(getRankings(room).map((player) => player.id), [sameDeviceStudent.id]);
 }
 
 {
@@ -127,10 +112,11 @@ function withMathRandom(value, callback) {
 
   assert.strictEqual(removed.length, 1);
   assert.strictEqual(removed[0].id, accidentalTeacher.id);
-  assert.strictEqual(isTeacherDevice(room, "teacher-phone"), true);
+  assert.strictEqual(isTeacherDevice(room, "teacher-phone"), false);
   assert.strictEqual(room.players[accidentalTeacher.id], undefined);
   assert.strictEqual(Object.keys(room.rounds[0].submissions).length, 0);
-  assert.throws(() => joinRoom(room, null, { deviceId: "teacher-phone" }), /교사 기기/);
+  const rejoined = joinRoom(room, null, { deviceId: "teacher-phone" });
+  assert.ok(rejoined.id);
 }
 
 console.log("game logic tests passed");

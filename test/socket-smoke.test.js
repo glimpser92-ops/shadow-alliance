@@ -135,14 +135,14 @@ function emit(socket, event, payload) {
         roundSeconds: 30
       }
     });
-    const blockedTeacherDevice = await connect();
-    sockets.push(blockedTeacherDevice);
-    const blockedJoin = await emit(blockedTeacherDevice, "student:join", {
+    const firstStudent = await connect();
+    sockets.push(firstStudent);
+    const firstStudentJoin = await emit(firstStudent, "student:join", {
       code: cleanupRoom.code,
       deviceId: "teacher-device"
     });
-    assert.strictEqual(blockedJoin.blockedAsTeacher, true);
-    assert.strictEqual(blockedJoin.state.players.length, 0);
+    assert.ok(firstStudentJoin.playerId);
+    assert.strictEqual(firstStudentJoin.state.personal.deviceId, undefined);
 
     const cleanupStudent = await connect();
     sockets.push(cleanupStudent);
@@ -156,8 +156,9 @@ function emit(socket, event, payload) {
       role: "teacher",
       deviceId: "teacher-device"
     });
-    assert.strictEqual(cleanupWatch.state.players.length, 1);
-    assert.strictEqual(cleanupWatch.state.players[0].id, cleanupStudentJoin.playerId);
+    assert.strictEqual(cleanupWatch.state.players.length, 2);
+    assert.ok(cleanupWatch.state.players.some((player) => player.id === firstStudentJoin.playerId));
+    assert.ok(cleanupWatch.state.players.some((player) => player.id === cleanupStudentJoin.playerId));
 
     const tokenCarrier = await connect();
     sockets.push(tokenCarrier);
@@ -167,7 +168,7 @@ function emit(socket, event, payload) {
       teacherToken: cleanupRoom.teacherToken
     });
     assert.strictEqual(tokenBlockedJoin.blockedAsTeacher, true);
-    assert.strictEqual(tokenBlockedJoin.state.players.length, 1);
+    assert.strictEqual(tokenBlockedJoin.state.players.length, 2);
 
     const excludeRoom = await emit(cleanupTeacher, "room:create", {
       deviceId: "main-teacher-device",
@@ -200,12 +201,12 @@ function emit(socket, event, payload) {
     });
     assert.strictEqual(excluded.state.status, "round");
     assert.strictEqual(excluded.state.players.length, 0);
-    const blockedTeacherPhoneAgain = await emit(teacherPhone, "student:join", {
+    const teacherPhoneAgain = await emit(teacherPhone, "student:join", {
       code: excludeRoom.code,
       deviceId: "teacher-phone-device"
     });
-    assert.strictEqual(blockedTeacherPhoneAgain.blockedAsTeacher, true);
-    assert.strictEqual(blockedTeacherPhoneAgain.state.players.length, 0);
+    assert.ok(teacherPhoneAgain.playerId);
+    assert.strictEqual(teacherPhoneAgain.state.players, undefined);
 
     const legacyTeacher = await connect();
     sockets.push(legacyTeacher);
@@ -223,13 +224,13 @@ function emit(socket, event, payload) {
       code: legacyRoom.code,
       deviceId: "legacy-teacher-device"
     });
-    const cleanedLegacyRoom = await emit(legacyTeacher, "room:watch", {
+    const watchedLegacyWithTeacherDevice = await emit(legacyTeacher, "room:watch", {
       code: legacyRoom.code,
       teacherToken: legacyRoom.teacherToken,
       role: "teacher",
       deviceId: "legacy-teacher-device"
     });
-    assert.strictEqual(cleanedLegacyRoom.state.players.length, 0);
+    assert.strictEqual(watchedLegacyWithTeacherDevice.state.players.length, 1);
     const legacyStudent = await connect();
     sockets.push(legacyStudent);
     const legacyStudentJoin = await emit(legacyStudent, "student:join", {
@@ -242,8 +243,8 @@ function emit(socket, event, payload) {
       role: "teacher",
       deviceId: "legacy-teacher-device"
     });
-    assert.strictEqual(watchedLegacyRoom.state.players.length, 1);
-    assert.strictEqual(watchedLegacyRoom.state.players[0].id, legacyStudentJoin.playerId);
+    assert.strictEqual(watchedLegacyRoom.state.players.length, 2);
+    assert.ok(watchedLegacyRoom.state.players.some((player) => player.id === legacyStudentJoin.playerId));
 
     const studentRoom = await emit(cleanupTeacher, "room:create", {
       settings: {

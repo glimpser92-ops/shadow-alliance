@@ -21,9 +21,7 @@ const {
   updateSettings,
   adjustRoundTime,
   excludeTeacherPlayer,
-  isTeacherDevice,
   registerTeacherDevice,
-  purgeTeacherPlayers,
   removePlayer
 } = require("./lib/game");
 
@@ -126,8 +124,8 @@ io.on("connection", (socket) => {
   socket.on("student:join", ({ code, playerId, deviceId, teacherToken } = {}, reply) => {
     safeReply(reply, () => {
       const room = requireRoom(code);
-      if (teacherToken === room.teacherToken || isTeacherDevice(room, deviceId)) {
-        const removed = teacherToken === room.teacherToken ? registerTeacherDevice(room, deviceId) : purgeTeacherPlayers(room);
+      if (teacherToken && teacherToken === room.teacherToken) {
+        const removed = registerTeacherDevice(room, deviceId);
         clearRemovedPlayersSockets(room.code, removed);
         if (removed.length) broadcastRoom(room);
         return {
