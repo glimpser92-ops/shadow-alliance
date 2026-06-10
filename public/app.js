@@ -887,7 +887,7 @@ function studentRound() {
       </div>
       <div class="number-input">
         <input type="range" min="1" max="100" value="${current}" data-input="range" />
-        <input type="number" min="1" max="100" value="${current}" data-input="number" />
+        <input type="number" min="1" max="100" value="${current}" inputmode="numeric" pattern="[0-9]*" data-input="number" />
       </div>
       <button class="btn primary" data-action="submit-number">
         ${state.personal?.currentSubmission ? "✧ 숫자 바꾸기" : "✧ 숫자 제출"}
@@ -944,6 +944,13 @@ function bindStudent() {
       submissionDraftRound = state.currentRound;
       return submissionDraftValue;
     };
+    const saveDraftIfValid = (value) => {
+      const parsed = parseSubmissionValue(value);
+      if (parsed === null) return null;
+      submissionDraftValue = parsed;
+      submissionDraftRound = state.currentRound;
+      return parsed;
+    };
     range.addEventListener("input", () => {
       number.value = range.value;
       saveDraft(range.value);
@@ -953,19 +960,18 @@ function bindStudent() {
       saveDraft(range.value);
     });
     number.addEventListener("input", () => {
-      const value = saveDraft(number.value);
-      range.value = value;
-      number.value = value;
+      const value = saveDraftIfValid(number.value);
+      if (value !== null) range.value = value;
     });
     number.addEventListener("change", () => {
-      const value = saveDraft(number.value);
+      const value = saveDraft(number.value || getSubmissionInputValue());
       range.value = value;
       number.value = value;
     });
   }
   app.querySelector('[data-action="submit-number"]')?.addEventListener("click", () => {
     const input = app.querySelector('[data-input="number"]');
-    const value = normalizeSubmissionValue(input?.value ?? getSubmissionInputValue());
+    const value = normalizeSubmissionValue(input?.value, getSubmissionInputValue());
     submissionDraftValue = value;
     submissionDraftRound = state.currentRound;
     if (input) input.value = value;
@@ -1003,12 +1009,24 @@ function captureSubmissionDraftFromDom() {
         ? range
         : number || range;
   if (!source) return;
-  submissionDraftValue = normalizeSubmissionValue(source.value);
+  const value = parseSubmissionValue(source.value);
+  if (value === null) return;
+  submissionDraftValue = value;
   submissionDraftRound = state.currentRound;
 }
 
-function normalizeSubmissionValue(value) {
-  return clamp(Math.round(Number(value)), 1, 100);
+function parseSubmissionValue(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const number = Number(raw);
+  if (!Number.isFinite(number)) return null;
+  return clamp(Math.round(number), 1, 100);
+}
+
+function normalizeSubmissionValue(value, fallback = 50) {
+  const parsed = parseSubmissionValue(value);
+  if (parsed !== null) return parsed;
+  return parseSubmissionValue(fallback) || 50;
 }
 
 function consumeSceneClass() {
