@@ -12,6 +12,7 @@ const {
   removePlayer,
   registerTeacherDevice,
   serializeRoom,
+  setPenaltyTargetCount,
   startRound,
   submitNumber
 } = require("../lib/game");
@@ -147,6 +148,44 @@ function withMathRandom(value, callback) {
   assert.strictEqual(result.penalty, null);
   assert.strictEqual(result.gains[blackA.id], 5000);
   assert.strictEqual(result.gains[blackB.id], 5000);
+  assert.strictEqual(Object.values(result.gains).reduce((sum, value) => sum + value, 0), 10000);
+}
+
+{
+  const room = createRoom("MANUAL", {
+    directiveMin: 50,
+    directiveMax: 50,
+    roundSeconds: 300,
+    totalRounds: 5
+  });
+  const blackLow = joinRoom(room);
+  const blackMid = joinRoom(room);
+  const blackHigh = joinRoom(room);
+  const blackTop = joinRoom(room);
+  const white = joinRoom(room);
+  blackLow.team = "black";
+  blackMid.team = "black";
+  blackHigh.team = "black";
+  blackTop.team = "black";
+  white.team = "white";
+  withMathRandom(0, () => startRound(room));
+  setPenaltyTargetCount(room, 2);
+  submitNumber(room, blackLow.id, 20);
+  submitNumber(room, blackMid.id, 40);
+  submitNumber(room, blackHigh.id, 60);
+  submitNumber(room, blackTop.id, 80);
+  submitNumber(room, white.id, 100);
+
+  const result = endRound(room);
+
+  assert.strictEqual(result.winnerTeam, "black");
+  assert.strictEqual(result.penalty.targetMode, "manual");
+  assert.strictEqual(result.penalty.targetCount, 2);
+  assert.deepStrictEqual(result.penalty.values, [80, 60]);
+  assert.strictEqual(result.gains[blackLow.id], 3333);
+  assert.strictEqual(result.gains[blackMid.id], 6667);
+  assert.strictEqual(result.gains[blackHigh.id], 0);
+  assert.strictEqual(result.gains[blackTop.id], 0);
   assert.strictEqual(Object.values(result.gains).reduce((sum, value) => sum + value, 0), 10000);
 }
 

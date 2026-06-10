@@ -65,6 +65,12 @@ function emit(socket, event, payload) {
     const started = await emit(teacher, "teacher:startRound", { code, teacherToken });
     assert.strictEqual(started.state.status, "round");
     assert.strictEqual(started.state.directive, 50);
+    const manualCut = await emit(teacher, "teacher:setPenaltyTarget", {
+      code,
+      teacherToken,
+      targetCount: 1
+    });
+    assert.strictEqual(manualCut.state.penaltyTargetCount, 1);
 
     const lateSocket = await connect();
     sockets.push(lateSocket);

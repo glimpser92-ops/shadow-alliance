@@ -16,6 +16,7 @@ const {
   pauseRound,
   resumeRound,
   serializeRoom,
+  setPenaltyTargetCount,
   startRound,
   submitNumber,
   updateSettings,
@@ -192,6 +193,15 @@ io.on("connection", (socket) => {
     safeReply(reply, () => {
       const room = requireTeacherRoom(code, teacherToken);
       adjustRoundTime(room, deltaSeconds);
+      broadcastRoom(room);
+      return { state: serializeRoom(room, { role: "teacher" }) };
+    });
+  });
+
+  socket.on("teacher:setPenaltyTarget", ({ code, teacherToken, targetCount } = {}, reply) => {
+    safeReply(reply, () => {
+      const room = requireTeacherRoom(code, teacherToken);
+      setPenaltyTargetCount(room, targetCount);
       broadcastRoom(room);
       return { state: serializeRoom(room, { role: "teacher" }) };
     });

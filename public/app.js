@@ -20,8 +20,8 @@ const rules = [
   },
   {
     title: "욕심 VS 팀",
-    body: "라운드마다 n이 무작위로 정해진다. 승리한 연합 안에서 높은 숫자 상위 n명은 0점 처리되고, 나머지가 자신이 낸 숫자 비율만큼 세력을 나눠 가진다.",
-    formula: "10,000 × (내 숫자 ÷ 랜덤 컷 제외 후 숫자 총합)"
+    body: "기본은 라운드마다 n이 무작위로 정해진다. 본부가 n을 직접 고정할 수도 있고, 승리한 연합 안에서 높은 숫자 상위 n명은 0점 처리된다.",
+    formula: "10,000 × (내 숫자 ÷ 컷 제외 후 숫자 총합)"
   },
   {
     title: "갈등의 씨앗",
@@ -71,7 +71,7 @@ const simulationSteps = [
   },
   {
     title: "승리팀 세력 분배",
-    body: "이번 라운드의 랜덤 컷은 n=1이다. 블랙의 가장 큰 숫자 60은 0점 처리되고, 30과 42가 10,000 세력을 비율대로 나눠 가진다.",
+    body: "이번 라운드의 컷은 n=1이다. 블랙의 가장 큰 숫자 60은 0점 처리되고, 30과 42가 10,000 세력을 비율대로 나눠 가진다.",
     phase: "reward"
   },
   {
@@ -142,6 +142,7 @@ function init() {
 
 socket.on("room:state", ({ event, state: nextState }) => {
   const keepStudentNumberFocus = shouldKeepStudentNumberFocus(nextState);
+  const keepTeacherPenaltyFocus = shouldKeepTeacherPenaltyFocus(nextState);
   captureSubmissionDraftFromDom();
   state = nextState;
   if (event === "start" || event === "result" || event === "final") {
@@ -151,6 +152,11 @@ socket.on("room:state", ({ event, state: nextState }) => {
   }
   if (keepStudentNumberFocus) {
     updateStudentRoundLive();
+    syncAmbientMusic();
+    return;
+  }
+  if (keepTeacherPenaltyFocus) {
+    updateTeacherRoundLive();
     syncAmbientMusic();
     return;
   }
@@ -314,7 +320,7 @@ function simulationTeam(team, phase) {
                 ${
                   showGains
                     ? `<small class="${data.penaltyIndices?.includes(index) ? "penalty-text" : ""}">
-                        ${data.penaltyIndices?.includes(index) ? "랜덤 컷 · " : ""}${data.gains[index].toLocaleString()} 세력
+                        ${data.penaltyIndices?.includes(index) ? "상위 컷 · " : ""}${data.gains[index].toLocaleString()} 세력
                       </small>`
                     : ""
                 }
@@ -594,9 +600,9 @@ function teacherRound() {
     <section class="round-grid">
       <div class="panel directive ${timerUrgencyClass()}">
         <div class="eyebrow">중앙 본부 지령</div>
-        <span class="number">${state.directive}</span>
-        <div class="timer">${formatTimer(state.remainingMs)}</div>
-        <div class="bar" style="--progress:${Math.max(0, Math.min(100, percent))}%"><span></span></div>
+        <span class="number" data-live="teacher-directive">${state.directive}</span>
+        <div class="timer" data-live="teacher-timer">${formatTimer(state.remainingMs)}</div>
+        <div class="bar" data-live="teacher-timer-bar" style="--progress:${Math.max(0, Math.min(100, percent))}%"><span></span></div>
         <div class="actions" style="justify-content:center">
           <button class="btn" data-action="pause">${state.paused ? "▶ 재개" : "⏸ 일시정지"}</button>
           <button class="btn ghost" data-action="plus-time">+30초</button>
@@ -607,14 +613,42 @@ function teacherRound() {
       <div class="panel">
         <div class="stat-line">
           <span class="gold">제출 현황</span>
-          <strong>${state.counts.submitted} / ${state.counts.total} 제출 완료</strong>
+          <strong data-live="teacher-submission-count">${state.counts.submitted} / ${state.counts.total} 제출 완료</strong>
         </div>
+        ${penaltyTargetControl()}
         <div class="submission-grid" style="margin-top:16px">
           ${state.players.map(studentChip).join("") || `<p class="muted">학생이 접속하면 여기에 표시됩니다.</p>`}
         </div>
       </div>
     </section>
   `;
+}
+
+function penaltyTargetControl() {
+  const target = state.penaltyTargetCount || "random";
+  return `
+    <div class="penalty-control">
+      <div class="stat-line">
+        <span class="gold">상위 컷 n</span>
+        <strong data-live="penalty-target-label">${target === "random" ? "자동 랜덤" : `n=${target}`}</strong>
+      </div>
+      <div class="penalty-picker">
+        <select data-input="penalty-target" aria-label="상위 컷 n">
+          <option value="random" ${target === "random" ? "selected" : ""}>자동 랜덤</option>
+          ${penaltyTargetOptions(target)}
+        </select>
+      </div>
+    </div>
+  `;
+}
+
+function penaltyTargetOptions(selected) {
+  const max = Math.max(1, state.counts.total - 1);
+  const options = [];
+  for (let value = 1; value <= max; value += 1) {
+    options.push(`<option value="${value}" ${Number(selected) === value ? "selected" : ""}>n=${value}</option>`);
+  }
+  return options.join("");
 }
 
 function studentChip(player) {
@@ -629,9 +663,10 @@ function studentChip(player) {
 function teacherResult() {
   const result = state.result;
   const winner = result?.winnerTeam ? TEAMS[result.winnerTeam] : null;
+  const penaltyLabel = result?.penalty?.targetMode === "manual" ? "수동 컷" : "랜덤 컷";
   const penaltyMessage = result?.penalty
-    ? `이번 랜덤 컷 n=${result.penalty.targetCount}. 높은 숫자 ${result.penalty.values.join(", ")} 제출자 ${result.penalty.count}명은 0점 처리됩니다.`
-    : "이번 라운드 랜덤 컷 대상은 없습니다.";
+    ? `이번 ${penaltyLabel} n=${result.penalty.targetCount}. 높은 숫자 ${result.penalty.values.join(", ")} 제출자 ${result.penalty.count}명은 0점 처리됩니다.`
+    : "이번 라운드 컷 대상은 없습니다.";
   return `
     <section class="panel">
       <div class="eyebrow center">라운드 ${state.currentRound} 종료</div>
@@ -744,6 +779,12 @@ function bindTeacher() {
   app.querySelector('[data-action="minus-time"]')?.addEventListener("click", () =>
     teacherEmit("teacher:adjustTime", { deltaSeconds: -30 })
   );
+  app.querySelector('[data-input="penalty-target"]')?.addEventListener("change", (event) => {
+    const targetCount = event.currentTarget.value;
+    teacherEmit("teacher:setPenaltyTarget", { targetCount }).then(() => {
+      showToast(targetCount === "random" ? "상위 컷을 자동 랜덤으로 설정했습니다." : `상위 컷 n=${targetCount} 적용`);
+    });
+  });
   app.querySelector('[data-action="end-round"]')?.addEventListener("click", () => teacherEmit("teacher:endRound"));
   app.querySelectorAll('[data-action="remove-player"]').forEach((button) => {
     button.addEventListener("click", () => {
@@ -916,7 +957,7 @@ function studentResult() {
         <p class="gold">세력</p>
         <p class="${personalPenalty ? "penalty-text" : "muted"}">${
           personalPenalty
-            ? "랜덤 컷 페널티로 이번 분배에서 제외되었습니다."
+            ? "상위 컷 페널티로 이번 분배에서 제외되었습니다."
             : winner
               ? `${winner.label}이 지령을 지배했습니다.`
               : "양 연합 모두 세력 변동이 없습니다."
@@ -1046,6 +1087,16 @@ function shouldKeepStudentNumberFocus(nextState) {
   );
 }
 
+function shouldKeepTeacherPenaltyFocus(nextState) {
+  return Boolean(
+    mode === "teacher" &&
+      state?.status === "round" &&
+      nextState?.status === "round" &&
+      state.currentRound === nextState.currentRound &&
+      document.activeElement?.matches?.('[data-input="penalty-target"]')
+  );
+}
+
 function updateStudentRoundLive() {
   if (mode !== "student" || state?.status !== "round") return;
   const percent = Math.round((state.remainingMs / (state.settings.roundSeconds * 1000)) * 100);
@@ -1067,6 +1118,26 @@ function updateStudentRoundLive() {
   }
   if (submitButton) {
     submitButton.textContent = state.personal?.currentSubmission ? "✧ 숫자 바꾸기" : "✧ 숫자 제출";
+  }
+}
+
+function updateTeacherRoundLive() {
+  if (mode !== "teacher" || state?.status !== "round") return;
+  const percent = Math.round((state.remainingMs / (state.settings.roundSeconds * 1000)) * 100);
+  const directive = app.querySelector('[data-live="teacher-directive"]');
+  const timer = app.querySelector('[data-live="teacher-timer"]');
+  const timerBar = app.querySelector('[data-live="teacher-timer-bar"]');
+  const directivePanel = app.querySelector(".teacher-layout .directive");
+  const submissionCount = app.querySelector('[data-live="teacher-submission-count"]');
+  const penaltyTargetLabel = app.querySelector('[data-live="penalty-target-label"]');
+
+  if (directive) directive.textContent = String(state.directive ?? "");
+  if (timer) timer.textContent = formatTimer(state.remainingMs);
+  if (timerBar) timerBar.style.setProperty("--progress", `${Math.max(0, Math.min(100, percent))}%`);
+  if (directivePanel) directivePanel.classList.toggle("urgent", timerUrgencyClass() === "urgent");
+  if (submissionCount) submissionCount.textContent = `${state.counts.submitted} / ${state.counts.total} 제출 완료`;
+  if (penaltyTargetLabel) {
+    penaltyTargetLabel.textContent = state.penaltyTargetCount ? `n=${state.penaltyTargetCount}` : "자동 랜덤";
   }
 }
 

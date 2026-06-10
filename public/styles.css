@@ -733,6 +733,36 @@ select:disabled {
   border-bottom: 0;
 }
 
+.penalty-control {
+  display: grid;
+  gap: 12px;
+  margin: 12px 0 4px;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 14px;
+}
+
+.penalty-picker {
+  display: flex;
+  gap: 10px;
+}
+
+.penalty-picker select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 9px 14px;
+  background: rgba(7, 7, 11, 0.88);
+  color: var(--gold-2);
+  font-family: var(--font-mono);
+  font-weight: 800;
+  outline: none;
+}
+
+.penalty-picker select:focus {
+  box-shadow: 0 0 0 3px rgba(232, 199, 108, 0.12);
+}
+
 .pill {
   display: inline-flex;
   align-items: center;
