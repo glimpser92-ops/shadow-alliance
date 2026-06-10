@@ -4,6 +4,7 @@
   --panel: #14131b;
   --panel-2: #181622;
   --line: rgba(229, 194, 104, 0.35);
+  --line-strong: rgba(232, 199, 108, 0.7);
   --line-soft: rgba(255, 255, 255, 0.1);
   --gold: #e8c76c;
   --gold-2: #f5db8f;
@@ -15,7 +16,9 @@
   --black-team: #09090c;
   --white-team: #f2f1ee;
   --shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
-  --radius: 8px;
+  --radius: 10px;
+  --font-display: "Cinzel", "Noto Serif KR", "Times New Roman", serif;
+  --font-mono: Consolas, "Courier New", monospace;
 }
 
 * {
@@ -30,17 +33,43 @@ body {
 body {
   margin: 0;
   background:
-    radial-gradient(circle at 20% 0%, rgba(139, 102, 43, 0.16), transparent 30rem),
-    radial-gradient(circle at 80% 20%, rgba(91, 73, 126, 0.12), transparent 26rem),
+    radial-gradient(circle at 18% -4%, rgba(139, 102, 43, 0.2), transparent 32rem),
+    radial-gradient(circle at 82% 12%, rgba(91, 73, 126, 0.14), transparent 28rem),
+    radial-gradient(circle at 50% 120%, rgba(60, 44, 16, 0.18), transparent 40rem),
     linear-gradient(180deg, #11100e, var(--bg) 34rem);
+  background-attachment: fixed;
   color: var(--text);
   font-family:
-    "Times New Roman",
     "Noto Serif KR",
+    "Times New Roman",
     "Nanum Myeongjo",
     Georgia,
     serif;
   line-height: 1.6;
+}
+
+::selection {
+  background: rgba(232, 199, 108, 0.32);
+  color: #fff;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0d0c11;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid #0d0c11;
+  border-radius: 999px;
+  background: rgba(232, 199, 108, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(232, 199, 108, 0.5);
 }
 
 button,
@@ -65,11 +94,19 @@ select:disabled {
   position: fixed;
   inset: 0;
   z-index: 0;
-  opacity: 0.16;
+  opacity: 0.14;
   background-image:
     linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
   background-size: 3px 3px, 7px 7px;
+}
+
+.vignette {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: radial-gradient(ellipse at 50% 42%, transparent 55%, rgba(0, 0, 0, 0.5) 130%);
 }
 
 .app-shell {
@@ -99,13 +136,14 @@ select:disabled {
   align-items: center;
   gap: 10px;
   color: var(--gold-2);
+  font-family: var(--font-display);
   letter-spacing: 0.12em;
-  font-weight: 800;
+  font-weight: 700;
   text-transform: uppercase;
 }
 
 .brand-small {
-  font-size: clamp(18px, 2vw, 24px);
+  font-size: clamp(16px, 2vw, 22px);
 }
 
 .brand-large {
@@ -118,10 +156,28 @@ select:disabled {
 
 .brand-large .title {
   color: var(--gold-2);
+  font-family: var(--font-display);
   font-size: clamp(48px, 8vw, 92px);
+  font-weight: 900;
   line-height: 0.95;
   letter-spacing: 0.16em;
-  text-shadow: 0 15px 40px rgba(232, 199, 108, 0.16);
+  background: linear-gradient(180deg, #fbe9b4 18%, var(--gold) 52%, #a87f37 88%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 14px 38px rgba(232, 199, 108, 0.22));
+  animation: titleGlow 5s ease-in-out infinite;
+}
+
+@keyframes titleGlow {
+  0%,
+  100% {
+    filter: drop-shadow(0 14px 38px rgba(232, 199, 108, 0.18));
+  }
+
+  50% {
+    filter: drop-shadow(0 14px 44px rgba(232, 199, 108, 0.4));
+  }
 }
 
 .brand-large .subtitle {
@@ -131,9 +187,22 @@ select:disabled {
 }
 
 .brand-large .motto {
+  position: relative;
   color: var(--gold);
   letter-spacing: 0.42em;
   font-size: 13px;
+  padding: 14px 0 0;
+}
+
+.brand-large .motto::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 220px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
 }
 
 .sigil {
@@ -156,6 +225,13 @@ select:disabled {
   width: 92px;
   height: 92px;
   margin-bottom: 18px;
+  animation: sigilSpin 26s linear infinite;
+}
+
+@keyframes sigilSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .actions {
@@ -166,28 +242,59 @@ select:disabled {
 }
 
 .btn {
+  position: relative;
   min-height: 42px;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
   padding: 10px 18px;
   background: rgba(16, 15, 22, 0.72);
   color: var(--text);
+  letter-spacing: 0.04em;
   transition:
     transform 0.18s ease,
     border-color 0.18s ease,
+    box-shadow 0.18s ease,
     background 0.18s ease;
 }
 
 .btn:hover {
   border-color: var(--line);
   transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+}
+
+.btn:active {
+  transform: translateY(0);
 }
 
 .btn.primary {
   border-color: rgba(232, 199, 108, 0.65);
-  background: linear-gradient(180deg, #f2d477, #c99b42);
+  background: linear-gradient(180deg, #f4d77c, #c99b42);
   color: #15100a;
   font-weight: 800;
+  overflow: hidden;
+  box-shadow:
+    0 1px 0 rgba(255, 240, 190, 0.65) inset,
+    0 10px 26px rgba(201, 155, 66, 0.22);
+}
+
+.btn.primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.45) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 0.5s ease;
+}
+
+.btn.primary:hover::after {
+  transform: translateX(120%);
+}
+
+.btn.primary:hover {
+  box-shadow:
+    0 1px 0 rgba(255, 240, 190, 0.65) inset,
+    0 12px 32px rgba(232, 199, 108, 0.35);
 }
 
 .btn.ghost {
@@ -197,6 +304,11 @@ select:disabled {
 .btn.danger {
   border-color: rgba(226, 125, 115, 0.5);
   color: #ffd0ca;
+}
+
+.btn.danger:hover {
+  border-color: rgba(226, 125, 115, 0.85);
+  box-shadow: 0 8px 22px rgba(226, 125, 115, 0.18);
 }
 
 .btn.icon {
@@ -209,10 +321,13 @@ select:disabled {
 
 .home-card,
 .panel {
+  position: relative;
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
   background: linear-gradient(180deg, rgba(20, 19, 27, 0.96), rgba(13, 13, 19, 0.96));
-  box-shadow: var(--shadow);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.045) inset,
+    var(--shadow);
 }
 
 .home-grid {
@@ -237,6 +352,7 @@ select:disabled {
 .heading {
   margin: 8px 0 18px;
   color: var(--gold-2);
+  font-family: var(--font-display);
   font-size: clamp(34px, 5vw, 56px);
   line-height: 1.15;
   letter-spacing: 0.05em;
@@ -258,10 +374,12 @@ select:disabled {
   height: 5px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.12);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 
 .rule-dot.active {
   background: var(--gold);
+  box-shadow: 0 0 10px rgba(232, 199, 108, 0.45);
 }
 
 .rule-card {
@@ -269,6 +387,27 @@ select:disabled {
   min-height: 260px;
   padding: 26px;
   overflow: hidden;
+  animation: cardIn 0.4s ease both;
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rule-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 88% 8%, rgba(232, 199, 108, 0.08), transparent 14rem);
+  pointer-events: none;
 }
 
 .rule-card::after {
@@ -276,8 +415,9 @@ select:disabled {
   position: absolute;
   right: 24px;
   top: 16px;
-  color: rgba(232, 199, 108, 0.12);
-  font-size: 72px;
+  color: rgba(232, 199, 108, 0.14);
+  font-family: var(--font-display);
+  font-size: 76px;
   font-weight: 900;
   line-height: 1;
 }
@@ -321,6 +461,7 @@ select:disabled {
   border: 1px solid var(--line-soft);
   border-radius: var(--radius);
   background: rgba(7, 7, 11, 0.5);
+  transition: border-color 0.35s ease, background 0.35s ease, box-shadow 0.35s ease;
 }
 
 .sim-directive {
@@ -337,6 +478,7 @@ select:disabled {
 .sim-reveal {
   border-color: var(--line);
   background: rgba(232, 199, 108, 0.07);
+  box-shadow: 0 0 26px rgba(232, 199, 108, 0.08) inset;
 }
 
 .sim-directive span,
@@ -348,7 +490,7 @@ select:disabled {
 
 .sim-directive strong {
   color: var(--gold-2);
-  font-family: Consolas, "Courier New", monospace;
+  font-family: var(--font-mono);
   font-size: 54px;
   line-height: 1;
 }
@@ -391,7 +533,7 @@ select:disabled {
 
 .sim-number span {
   color: var(--text);
-  font-family: Consolas, "Courier New", monospace;
+  font-family: var(--font-mono);
   font-size: 26px;
   font-weight: 900;
 }
@@ -414,7 +556,7 @@ select:disabled {
 
 .sim-average strong {
   color: var(--gold-2);
-  font-family: Consolas, "Courier New", monospace;
+  font-family: var(--font-mono);
   font-size: 24px;
 }
 
@@ -463,11 +605,13 @@ select:disabled {
   background: rgba(7, 7, 11, 0.88);
   color: var(--text);
   outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .field input:focus,
 .field select:focus {
   border-color: var(--line);
+  box-shadow: 0 0 0 3px rgba(232, 199, 108, 0.12);
 }
 
 .settings-grid {
@@ -494,15 +638,19 @@ select:disabled {
   place-items: center;
   min-height: 380px;
   text-align: center;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(232, 199, 108, 0.08), transparent 22rem),
+    linear-gradient(180deg, rgba(20, 19, 27, 0.96), rgba(13, 13, 19, 0.96));
 }
 
 .code-display {
   color: var(--gold);
-  font-family: Consolas, "Courier New", monospace;
+  font-family: var(--font-mono);
   font-size: clamp(64px, 9vw, 92px);
   font-weight: 900;
   line-height: 1;
   letter-spacing: 0.12em;
+  text-shadow: 0 0 38px rgba(232, 199, 108, 0.3);
 }
 
 .qr {
@@ -512,6 +660,10 @@ select:disabled {
   border-radius: var(--radius);
   background: #fff8df;
   padding: 10px;
+  box-shadow:
+    0 0 0 1px rgba(232, 199, 108, 0.5),
+    0 0 36px rgba(232, 199, 108, 0.14),
+    0 18px 44px rgba(0, 0, 0, 0.5);
 }
 
 .qr.compact {
@@ -555,7 +707,13 @@ select:disabled {
   padding: 9px 14px;
   color: var(--gold);
   background: rgba(0, 0, 0, 0.32);
-  font-family: Consolas, "Courier New", monospace;
+  font-family: var(--font-mono);
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.join-url:hover {
+  border-color: var(--line);
+  background: rgba(232, 199, 108, 0.07);
 }
 
 .compact-url {
@@ -586,6 +744,8 @@ select:disabled {
   padding: 6px 14px;
   color: var(--gold-2);
   background: rgba(232, 199, 108, 0.05);
+  font-family: var(--font-display);
+  letter-spacing: 0.1em;
 }
 
 .round-grid {
@@ -602,18 +762,41 @@ select:disabled {
   display: block;
   margin: 8px 0 20px;
   color: var(--gold-2);
+  font-family: var(--font-display);
   font-size: clamp(82px, 14vw, 150px);
   font-weight: 900;
   line-height: 0.9;
-  text-shadow: 0 0 32px rgba(232, 199, 108, 0.15);
+  text-shadow: 0 0 42px rgba(232, 199, 108, 0.22);
 }
 
 .timer {
   color: var(--text);
-  font-family: Consolas, "Courier New", monospace;
+  font-family: var(--font-mono);
   font-size: clamp(40px, 7vw, 70px);
   font-weight: 900;
   letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s ease;
+}
+
+.directive.urgent .timer {
+  color: #ff9d92;
+  animation: urgentPulse 1s ease-in-out infinite;
+}
+
+.directive.urgent .bar span {
+  background: linear-gradient(90deg, #8a3a32, var(--danger));
+}
+
+@keyframes urgentPulse {
+  0%,
+  100% {
+    text-shadow: 0 0 8px rgba(226, 125, 115, 0.25);
+  }
+
+  50% {
+    text-shadow: 0 0 26px rgba(226, 125, 115, 0.75);
+  }
 }
 
 .bar {
@@ -622,6 +805,7 @@ select:disabled {
   margin: 18px 0;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5) inset;
   overflow: hidden;
 }
 
@@ -631,6 +815,7 @@ select:disabled {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--gold-dark), var(--gold-2));
+  box-shadow: 0 0 12px rgba(232, 199, 108, 0.4);
   transition: width 0.3s ease;
 }
 
@@ -651,6 +836,7 @@ select:disabled {
 .student-chip {
   min-height: 70px;
   padding: 12px 14px;
+  transition: border-color 0.25s ease, background 0.25s ease;
 }
 
 .student-chip strong {
@@ -681,6 +867,12 @@ select:disabled {
   background: rgba(226, 125, 115, 0.08);
   color: #ffd0ca;
   font-size: 13px;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.mini-btn:hover {
+  border-color: rgba(226, 125, 115, 0.75);
+  background: rgba(226, 125, 115, 0.16);
 }
 
 .mini-btn.gold {
@@ -689,8 +881,14 @@ select:disabled {
   color: var(--gold-2);
 }
 
+.mini-btn.gold:hover {
+  border-color: rgba(232, 199, 108, 0.8);
+  background: rgba(232, 199, 108, 0.15);
+}
+
 .student-chip.done {
   border-color: rgba(143, 211, 161, 0.45);
+  background: rgba(143, 211, 161, 0.05);
 }
 
 .student-chip.done span {
@@ -699,6 +897,7 @@ select:disabled {
 
 .result-title {
   color: var(--gold-2);
+  font-family: var(--font-display);
   font-size: clamp(28px, 5vw, 44px);
   line-height: 1.2;
   text-align: center;
@@ -712,6 +911,7 @@ select:disabled {
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.25);
   vertical-align: -4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .team-mark.black {
@@ -736,9 +936,26 @@ select:disabled {
   display: inline-grid;
   place-items: center;
   color: var(--text);
-  font-family: Consolas, "Courier New", monospace;
+  font-family: var(--font-mono);
   font-size: 22px;
   border-color: var(--line);
+  background:
+    linear-gradient(180deg, rgba(232, 199, 108, 0.1), transparent 60%),
+    rgba(10, 10, 15, 0.64);
+  animation: chipReveal 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+@keyframes chipReveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.85);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .rank-list {
@@ -757,6 +974,7 @@ select:disabled {
 
 .rank-row .rank {
   color: var(--gold);
+  font-family: var(--font-display);
   font-size: 24px;
   font-weight: 900;
 }
@@ -769,12 +987,17 @@ select:disabled {
 
 .rank-row .score {
   color: var(--gold-2);
-  font-family: Consolas, "Courier New", monospace;
+  font-family: var(--font-mono);
   font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .rank-row.first {
   border-color: var(--line);
+  background:
+    linear-gradient(90deg, rgba(232, 199, 108, 0.12), transparent 65%),
+    rgba(10, 10, 15, 0.64);
+  box-shadow: 0 0 22px rgba(232, 199, 108, 0.07) inset;
 }
 
 .podium {
@@ -795,15 +1018,64 @@ select:disabled {
   padding: 18px 10px;
   background: linear-gradient(180deg, rgba(232, 199, 108, 0.18), rgba(12, 11, 14, 0.88));
   text-align: center;
+  animation: podiumRise 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.podium-card.place-2 {
+  animation-delay: 0.15s;
+}
+
+.podium-card.place-3 {
+  animation-delay: 0.3s;
+}
+
+@keyframes podiumRise {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .podium-card.place-1 {
+  position: relative;
   min-height: 230px;
-  border-color: var(--line);
+  border-color: var(--line-strong);
+  background: linear-gradient(180deg, rgba(232, 199, 108, 0.3), rgba(12, 11, 14, 0.88));
+  box-shadow: 0 0 44px rgba(232, 199, 108, 0.16);
+  animation-delay: 0.45s;
+}
+
+.podium-card.place-1::before {
+  content: "✦";
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--gold-2);
+  font-size: 26px;
+  text-shadow: 0 0 18px rgba(232, 199, 108, 0.8);
+  animation: crownTwinkle 2.2s ease-in-out infinite;
+}
+
+@keyframes crownTwinkle {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .podium-card .place {
   color: var(--gold-2);
+  font-family: var(--font-display);
   font-size: 54px;
   font-weight: 900;
   line-height: 1;
@@ -833,6 +1105,7 @@ select:disabled {
   user-select: none;
   -webkit-user-select: none;
   touch-action: manipulation;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .secret-card.revealed,
@@ -840,6 +1113,7 @@ select:disabled {
   border-color: rgba(232, 199, 108, 0.72);
   background: linear-gradient(180deg, #f0d074, #c99b42);
   color: #111;
+  box-shadow: 0 0 26px rgba(232, 199, 108, 0.28);
 }
 
 .secret-label {
@@ -878,9 +1152,11 @@ select:disabled {
 
 .student-focus .giant {
   color: var(--gold-2);
+  font-family: var(--font-display);
   font-size: clamp(70px, 24vw, 132px);
   font-weight: 900;
   line-height: 0.95;
+  text-shadow: 0 0 44px rgba(232, 199, 108, 0.24);
 }
 
 .submit-box {
@@ -896,13 +1172,63 @@ select:disabled {
 }
 
 .number-input input[type="range"] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 30px;
+  background: transparent;
   accent-color: var(--gold);
 }
 
+.number-input input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold-dark), rgba(255, 255, 255, 0.1));
+}
+
+.number-input input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px;
+  height: 26px;
+  margin-top: -9px;
+  border: 2px solid #2a2008;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fbe9b4, var(--gold) 70%);
+  box-shadow: 0 0 14px rgba(232, 199, 108, 0.55);
+  cursor: grab;
+}
+
+.number-input input[type="range"]::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--gold-dark), rgba(255, 255, 255, 0.1));
+}
+
+.number-input input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #2a2008;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fbe9b4, var(--gold) 70%);
+  box-shadow: 0 0 14px rgba(232, 199, 108, 0.55);
+  cursor: grab;
+}
+
 .number-input input[type="number"] {
+  min-height: 56px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  background: rgba(7, 7, 11, 0.88);
+  color: var(--gold-2);
   text-align: center;
+  font-family: var(--font-mono);
   font-size: 28px;
   font-weight: 900;
+  outline: none;
+}
+
+.number-input input[type="number"]:focus {
+  border-color: var(--line);
+  box-shadow: 0 0 0 3px rgba(232, 199, 108, 0.12);
 }
 
 .toast {
@@ -919,6 +1245,19 @@ select:disabled {
   color: var(--gold-2);
   text-align: center;
   box-shadow: var(--shadow);
+  animation: toastIn 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 .stage-transition {
@@ -954,6 +1293,7 @@ select:disabled {
 .stage-title {
   margin-top: 10px;
   color: var(--gold-2);
+  font-family: var(--font-display);
   font-size: clamp(40px, 8vw, 76px);
   font-weight: 900;
   letter-spacing: 0.08em;
@@ -1035,6 +1375,16 @@ select:disabled {
 
 .hidden {
   display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 @media (max-width: 820px) {

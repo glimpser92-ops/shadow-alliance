@@ -119,4 +119,21 @@ function withMathRandom(value, callback) {
   assert.ok(rejoined.id);
 }
 
+{
+  // 같은 기기에서 playerId 없이 연달아 입장해도 명단에는 1명만 생겨야 한다.
+  const room = createRoom("DEDUP", {
+    directiveMin: 50,
+    directiveMax: 50,
+    roundSeconds: 300,
+    totalRounds: 1
+  });
+  const first = joinRoom(room, null, { deviceId: "student-device-1" });
+  const second = joinRoom(room, null, { deviceId: "student-device-1" });
+  assert.strictEqual(first.id, second.id);
+  assert.strictEqual(Object.keys(room.players).length, 1);
+  const other = joinRoom(room, null, { deviceId: "student-device-2" });
+  assert.notStrictEqual(other.id, first.id);
+  assert.strictEqual(Object.keys(room.players).length, 2);
+}
+
 console.log("game logic tests passed");

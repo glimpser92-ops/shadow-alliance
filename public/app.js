@@ -99,6 +99,16 @@ let sceneMotion = "";
 
 init();
 
+// Browsers block audio until the first user gesture, so unlock the
+// background music on any tap or click on the teacher screen.
+document.addEventListener(
+  "pointerdown",
+  () => {
+    if (mode === "teacher" && soundOn) primeAmbientMusic();
+  },
+  { passive: true }
+);
+
 function init() {
   const parts = window.location.pathname.split("/").filter(Boolean);
   if (parts[0] === "teacher" && parts[1]) {
@@ -315,7 +325,7 @@ function simulationReveal() {
       <div class="eyebrow">결과 공개</div>
       <strong>블랙 연합 지배</strong>
       <div class="numbers">
-        ${winningNumbers.map((number) => `<span class="number-chip">${number}</span>`).join("")}
+        ${numberChips(winningNumbers)}
       </div>
       <p class="muted">패배 연합의 숫자는 공개되지 않습니다.</p>
     </div>
@@ -406,8 +416,19 @@ function getPreviousTeacherRoom() {
   }
 }
 
+let watchInFlight = false;
+
 async function watchRoom() {
-  if (!roomCode) return;
+  if (!roomCode || watchInFlight) return;
+  watchInFlight = true;
+  try {
+    await doWatchRoom();
+  } finally {
+    watchInFlight = false;
+  }
+}
+
+async function doWatchRoom() {
   await loadConfig();
   const payload = await emit("room:watch", {
     code: roomCode,
@@ -426,8 +447,19 @@ async function watchRoom() {
   renderTeacher();
 }
 
+let joinInFlight = false;
+
 async function joinRoom() {
-  if (!roomCode) return;
+  if (!roomCode || joinInFlight) return;
+  joinInFlight = true;
+  try {
+    await doJoinRoom();
+  } finally {
+    joinInFlight = false;
+  }
+}
+
+async function doJoinRoom() {
   const knownTeacherToken = localStorage.getItem(`shadow:teacher:${roomCode}`);
   const payload = await emit("student:join", { code: roomCode, playerId, deviceId, teacherToken: knownTeacherToken });
   if (payload.blockedAsTeacher) {
@@ -540,7 +572,7 @@ function teacherRound() {
   const percent = Math.round((state.remainingMs / (state.settings.roundSeconds * 1000)) * 100);
   return `
     <section class="round-grid">
-      <div class="panel directive">
+      <div class="panel directive ${timerUrgencyClass()}">
         <div class="eyebrow">중앙 본부 지령</div>
         <span class="number">${state.directive}</span>
         <div class="timer">${formatTimer(state.remainingMs)}</div>
@@ -593,7 +625,7 @@ function teacherResult() {
           <div class="numbers">
             ${
               result?.winningNumbers?.length
-                ? result.winningNumbers.map((number) => `<span class="number-chip">${number}</span>`).join("")
+                ? numberChips(result.winningNumbers)
                 : `<span class="muted">공개할 숫자가 없습니다.</span>`
             }
           </div>
@@ -678,7 +710,7 @@ function bindTeacher() {
   app.querySelectorAll('[data-action="start-round"]').forEach((button) => {
     button.addEventListener("click", () => {
       primeAmbientMusic();
-      teacherEmit("teacher:startRound").then(() => primeAmbientMusic({ forcePulse: true }));
+      teacherEmit("teacher:startRound").then(() => primeAmbientMusic());
     });
   });
   app.querySelector('[data-action="pause"]')?.addEventListener("click", () => teacherEmit("teacher:pause"));
@@ -823,7 +855,7 @@ function studentRound() {
   const percent = Math.round((state.remainingMs / (state.settings.roundSeconds * 1000)) * 100);
   const current = state.personal?.currentSubmission || 50;
   return `
-    <section class="panel directive">
+    <section class="panel directive ${timerUrgencyClass()}">
       <div class="eyebrow">중앙 본부 지령</div>
       <span class="number">${state.directive}</span>
       <div class="timer">${formatTimer(state.remainingMs)}</div>
@@ -864,7 +896,7 @@ function studentResult() {
       <div class="numbers">
         ${
           result?.winningNumbers?.length
-            ? result.winningNumbers.map((number) => `<span class="number-chip">${number}</span>`).join("")
+            ? numberChips(result.winningNumbers)
             : `<span class="muted">공개할 숫자가 없습니다.</span>`
         }
       </div>
@@ -1087,6 +1119,16 @@ function getDeviceId() {
   return value;
 }
 
+function timerUrgencyClass() {
+  return state?.status === "round" && !state.paused && state.remainingMs <= 30000 ? "urgent" : "";
+}
+
+function numberChips(numbers) {
+  return numbers
+    .map((number, index) => `<span class="number-chip" style="--i:${index}">${number}</span>`)
+    .join("");
+}
+
 function formatTimer(ms) {
   const total = Math.ceil(Math.max(0, ms) / 1000);
   const minutes = Math.floor(total / 60);
@@ -1166,7 +1208,7 @@ function showStageTransition(event, nextState) {
 
 function toggleSound() {
   if (soundOn && shouldPlayAmbientMusic() && !isAmbientRunning()) {
-    primeAmbientMusic({ forcePulse: true });
+    primeAmbientMusic();
     showToast("배경음악을 시작했습니다.");
     render();
     return;
@@ -1174,7 +1216,7 @@ function toggleSound() {
   soundOn = !soundOn;
   localStorage.setItem("shadow:sound", soundOn ? "on" : "off");
   if (soundOn) {
-    primeAmbientMusic({ forcePulse: true });
+    primeAmbientMusic();
     showToast("배경음악과 효과음을 켰습니다.");
   } else {
     syncAmbientMusic();
@@ -1200,23 +1242,43 @@ function isAmbientRunning() {
 }
 
 function shouldPlayAmbientMusic() {
-  return mode === "teacher" && soundOn && ["round", "result"].includes(state?.status);
+  return mode === "teacher" && soundOn && Boolean(state);
 }
 
-function primeAmbientMusic(options = {}) {
+function ambientTargetGain() {
+  if (!shouldPlayAmbientMusic()) return 0.0001;
+  if (state.status === "round") return 0.3;
+  if (state.status === "result") return 0.2;
+  if (state.status === "final") return 0.26;
+  return 0.13;
+}
+
+function primeAmbientMusic() {
   if (!soundOn) return;
   try {
     const music = ensureAmbientMusic();
     const resumeResult = music.context.state === "suspended" ? music.context.resume() : Promise.resolve();
     syncAmbientMusic();
-    Promise.resolve(resumeResult).then(() => {
-      syncAmbientMusic();
-      if (options.forcePulse) playAmbientPulse({ force: true });
-    });
+    Promise.resolve(resumeResult).then(syncAmbientMusic);
   } catch {
     // Background music is optional and may be blocked until the user interacts with the page.
   }
 }
+
+// 96 BPM, 8th-note steps. 8 bars of 8 steps = one 20-second loop in E minor.
+const MUSIC_STEP_SECONDS = 60 / 96 / 2;
+const MUSIC_TOTAL_STEPS = 64;
+const MUSIC_BAR_ROOTS = [82.41, 82.41, 98.0, 98.0, 110.0, 110.0, 130.81, 123.47];
+const MUSIC_MELODY = {
+  0: 329.63, 2: 392.0, 4: 493.88, 6: 440.0,
+  8: 392.0, 12: 369.99,
+  16: 392.0, 18: 493.88, 20: 587.33, 22: 523.25,
+  24: 493.88, 28: 392.0,
+  32: 440.0, 34: 523.25, 36: 659.25, 38: 587.33,
+  40: 523.25, 44: 493.88,
+  48: 659.25, 50: 587.33, 52: 523.25, 54: 493.88,
+  56: 493.88, 58: 587.33, 60: 369.99
+};
 
 function ensureAmbientMusic() {
   if (ambientAudio) return ambientAudio;
@@ -1225,89 +1287,133 @@ function ensureAmbientMusic() {
 
   const context = new AudioContext();
   const master = context.createGain();
-  const droneGain = context.createGain();
-  const filter = context.createBiquadFilter();
-  const lfo = context.createOscillator();
-  const lfoGain = context.createGain();
-
+  const compressor = context.createDynamicsCompressor();
   master.gain.value = 0.0001;
-  droneGain.gain.value = 0.08;
-  filter.type = "lowpass";
-  filter.frequency.value = 440;
-  filter.Q.value = 0.9;
-  lfo.frequency.value = 0.045;
-  lfoGain.gain.value = 120;
+  master.connect(compressor);
+  compressor.connect(context.destination);
 
-  lfo.connect(lfoGain);
-  lfoGain.connect(filter.frequency);
-  droneGain.connect(filter);
-  filter.connect(master);
-  master.connect(context.destination);
+  // Dotted-eighth echo gives the melody its spy-thriller tail.
+  const delay = context.createDelay(1.2);
+  const delayFeedback = context.createGain();
+  const delaySend = context.createGain();
+  delay.delayTime.value = MUSIC_STEP_SECONDS * 1.5;
+  delayFeedback.gain.value = 0.32;
+  delaySend.gain.value = 0.4;
+  delaySend.connect(delay);
+  delay.connect(delayFeedback);
+  delayFeedback.connect(delay);
+  delay.connect(master);
 
-  const oscillators = [55, 82.41, 110].map((frequency, index) => {
-    const oscillator = context.createOscillator();
-    oscillator.type = index === 1 ? "sine" : "triangle";
-    oscillator.frequency.value = frequency;
-    oscillator.detune.value = index === 0 ? -7 : index === 2 ? 5 : 0;
-    oscillator.connect(droneGain);
-    oscillator.start();
-    return oscillator;
-  });
-  lfo.start();
+  const noiseBuffer = context.createBuffer(1, context.sampleRate * 0.1, context.sampleRate);
+  const noiseData = noiseBuffer.getChannelData(0);
+  for (let i = 0; i < noiseData.length; i += 1) {
+    noiseData[i] = Math.random() * 2 - 1;
+  }
 
   ambientAudio = {
     context,
     master,
-    oscillators,
-    lfo,
+    delaySend,
+    noiseBuffer,
     step: 0,
-    pulseTimer: window.setInterval(playAmbientPulse, 1450)
+    nextNoteTime: 0,
+    timer: window.setInterval(scheduleAmbientMusic, 80)
   };
   return ambientAudio;
+}
+
+function scheduleAmbientMusic() {
+  const music = ambientAudio;
+  if (!music || music.context.state !== "running") return;
+  const now = music.context.currentTime;
+  if (music.nextNoteTime < now - 0.3) music.nextNoteTime = now + 0.05;
+  while (music.nextNoteTime < now + 0.25) {
+    playAmbientStep(music.step, music.nextNoteTime);
+    music.step = (music.step + 1) % MUSIC_TOTAL_STEPS;
+    music.nextNoteTime += MUSIC_STEP_SECONDS;
+  }
+}
+
+function playAmbientStep(step, time) {
+  const bar = Math.floor(step / 8);
+  const beat = step % 8;
+  const root = MUSIC_BAR_ROOTS[bar];
+  if (beat === 0) playAmbientBass(root, time, 0.5, 1.4);
+  if (beat === 6) playAmbientBass(root * 2, time, 0.3, 0.5);
+  const melodyFrequency = MUSIC_MELODY[step];
+  if (melodyFrequency) playAmbientPluck(melodyFrequency, time);
+  if (beat % 2 === 1) playAmbientHat(time, beat === 5 ? 0.05 : 0.03);
+}
+
+function playAmbientBass(frequency, time, peak, duration) {
+  const context = ambientAudio.context;
+  const oscillator = context.createOscillator();
+  const filter = context.createBiquadFilter();
+  const gain = context.createGain();
+  oscillator.type = "triangle";
+  oscillator.frequency.value = frequency;
+  filter.type = "lowpass";
+  filter.frequency.value = 360;
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.exponentialRampToValueAtTime(peak, time + 0.03);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+  oscillator.connect(filter);
+  filter.connect(gain);
+  gain.connect(ambientAudio.master);
+  oscillator.start(time);
+  oscillator.stop(time + duration + 0.1);
+}
+
+function playAmbientPluck(frequency, time) {
+  const context = ambientAudio.context;
+  const oscillator = context.createOscillator();
+  const shimmer = context.createOscillator();
+  const gain = context.createGain();
+  oscillator.type = "triangle";
+  oscillator.frequency.value = frequency;
+  shimmer.type = "sine";
+  shimmer.frequency.value = frequency;
+  shimmer.detune.value = 7;
+  gain.gain.setValueAtTime(0.0001, time);
+  gain.gain.exponentialRampToValueAtTime(0.22, time + 0.015);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.5);
+  oscillator.connect(gain);
+  shimmer.connect(gain);
+  gain.connect(ambientAudio.master);
+  gain.connect(ambientAudio.delaySend);
+  oscillator.start(time);
+  shimmer.start(time);
+  oscillator.stop(time + 0.6);
+  shimmer.stop(time + 0.6);
+}
+
+function playAmbientHat(time, peak) {
+  const context = ambientAudio.context;
+  const source = context.createBufferSource();
+  const filter = context.createBiquadFilter();
+  const gain = context.createGain();
+  source.buffer = ambientAudio.noiseBuffer;
+  filter.type = "highpass";
+  filter.frequency.value = 6500;
+  gain.gain.setValueAtTime(peak, time);
+  gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.05);
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(ambientAudio.master);
+  source.start(time);
+  source.stop(time + 0.08);
 }
 
 function syncAmbientMusic() {
   if (!ambientAudio) return;
   const context = ambientAudio.context;
-  const target = shouldPlayAmbientMusic() ? 0.14 : 0.0001;
+  const target = ambientTargetGain();
   try {
     ambientAudio.master.gain.cancelScheduledValues(context.currentTime);
     ambientAudio.master.gain.setTargetAtTime(target, context.currentTime, target > 0.001 ? 0.8 : 0.35);
   } catch {
     // Ignore audio automation failures.
   }
-}
-
-function playAmbientPulse(options = {}) {
-  if (!ambientAudio || (!options.force && !shouldPlayAmbientMusic())) return;
-  const context = ambientAudio.context;
-  if (context.state !== "running") return;
-  const notes = [196, 185, 164.81, 146.83, 130.81, 146.83, 164.81, 185];
-  const frequency = notes[ambientAudio.step % notes.length];
-  ambientAudio.step += 1;
-
-  const pulse = context.createOscillator();
-  const pulseGain = context.createGain();
-  const delay = context.createDelay();
-  const echoGain = context.createGain();
-  const now = context.currentTime;
-
-  pulse.type = "sine";
-  pulse.frequency.setValueAtTime(frequency, now);
-  pulse.frequency.exponentialRampToValueAtTime(Math.max(40, frequency * 0.72), now + 0.62);
-  pulseGain.gain.setValueAtTime(0.0001, now);
-  pulseGain.gain.exponentialRampToValueAtTime(0.07, now + 0.04);
-  pulseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
-  delay.delayTime.value = 0.28;
-  echoGain.gain.value = 0.16;
-
-  pulse.connect(pulseGain);
-  pulseGain.connect(ambientAudio.master);
-  pulseGain.connect(delay);
-  delay.connect(echoGain);
-  echoGain.connect(ambientAudio.master);
-  pulse.start(now);
-  pulse.stop(now + 1.05);
 }
 
 function playTone(event) {
