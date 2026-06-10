@@ -141,12 +141,18 @@ function init() {
 }
 
 socket.on("room:state", ({ event, state: nextState }) => {
+  const keepStudentNumberFocus = shouldKeepStudentNumberFocus(nextState);
   captureSubmissionDraftFromDom();
   state = nextState;
   if (event === "start" || event === "result" || event === "final") {
     sceneMotion = event;
     showStageTransition(event, nextState);
     playTone(event);
+  }
+  if (keepStudentNumberFocus) {
+    updateStudentRoundLive();
+    syncAmbientMusic();
+    return;
   }
   render();
 });
@@ -876,20 +882,20 @@ function studentRound() {
   return `
     <section class="panel directive ${timerUrgencyClass()}">
       <div class="eyebrow">중앙 본부 지령</div>
-      <span class="number">${state.directive}</span>
-      <div class="timer">${formatTimer(state.remainingMs)}</div>
-      <div class="bar" style="--progress:${Math.max(0, Math.min(100, percent))}%"><span></span></div>
+      <span class="number" data-live="directive">${state.directive}</span>
+      <div class="timer" data-live="timer">${formatTimer(state.remainingMs)}</div>
+      <div class="bar" data-live="timer-bar" style="--progress:${Math.max(0, Math.min(100, percent))}%"><span></span></div>
     </section>
     <section class="panel submit-box">
       <div class="stat-line">
         <span class="gold">제출 숫자</span>
-        <strong>${state.personal?.currentSubmission ? `${state.personal.currentSubmission} 제출됨` : "미제출"}</strong>
+        <strong data-live="submission-status">${state.personal?.currentSubmission ? `${state.personal.currentSubmission} 제출됨` : "미제출"}</strong>
       </div>
       <div class="number-input">
         <input type="range" min="1" max="100" value="${current}" data-input="range" />
         <input type="number" min="1" max="100" value="${current}" inputmode="numeric" pattern="[0-9]*" data-input="number" />
       </div>
-      <button class="btn primary" data-action="submit-number">
+      <button class="btn primary" data-action="submit-number" data-live="submit-button">
         ${state.personal?.currentSubmission ? "✧ 숫자 바꾸기" : "✧ 숫자 제출"}
       </button>
       <p class="muted center">제출 후에도 시간이 끝나기 전까지 바꿀 수 있습니다.</p>
@@ -1027,6 +1033,41 @@ function normalizeSubmissionValue(value, fallback = 50) {
   const parsed = parseSubmissionValue(value);
   if (parsed !== null) return parsed;
   return parseSubmissionValue(fallback) || 50;
+}
+
+function shouldKeepStudentNumberFocus(nextState) {
+  return Boolean(
+    mode === "student" &&
+      state?.status === "round" &&
+      nextState?.status === "round" &&
+      state.currentRound === nextState.currentRound &&
+      state.personal?.id === nextState.personal?.id &&
+      document.activeElement?.matches?.('[data-input="number"]')
+  );
+}
+
+function updateStudentRoundLive() {
+  if (mode !== "student" || state?.status !== "round") return;
+  const percent = Math.round((state.remainingMs / (state.settings.roundSeconds * 1000)) * 100);
+  const directive = app.querySelector('[data-live="directive"]');
+  const timer = app.querySelector('[data-live="timer"]');
+  const timerBar = app.querySelector('[data-live="timer-bar"]');
+  const directivePanel = app.querySelector(".student-main .directive");
+  const submissionStatus = app.querySelector('[data-live="submission-status"]');
+  const submitButton = app.querySelector('[data-live="submit-button"]');
+
+  if (directive) directive.textContent = String(state.directive ?? "");
+  if (timer) timer.textContent = formatTimer(state.remainingMs);
+  if (timerBar) timerBar.style.setProperty("--progress", `${Math.max(0, Math.min(100, percent))}%`);
+  if (directivePanel) directivePanel.classList.toggle("urgent", timerUrgencyClass() === "urgent");
+  if (submissionStatus) {
+    submissionStatus.textContent = state.personal?.currentSubmission
+      ? `${state.personal.currentSubmission} 제출됨`
+      : "미제출";
+  }
+  if (submitButton) {
+    submitButton.textContent = state.personal?.currentSubmission ? "✧ 숫자 바꾸기" : "✧ 숫자 제출";
+  }
 }
 
 function consumeSceneClass() {
