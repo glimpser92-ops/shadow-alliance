@@ -207,12 +207,12 @@ function renderHome() {
               </select>
             </div>
             <div class="field">
-              <label>지령 범위</label>
-              <select name="rangePreset">
-                <option value="30,70" selected>30~70</option>
-                <option value="20,80">20~80</option>
-                <option value="1,100">1~100</option>
-              </select>
+              <label>지령 최소</label>
+              <input name="directiveMin" type="number" min="1" max="100" value="30" inputmode="numeric" />
+            </div>
+            <div class="field">
+              <label>지령 최대</label>
+              <input name="directiveMax" type="number" min="1" max="100" value="70" inputmode="numeric" />
             </div>
           </div>
           <button class="btn primary" type="submit">✧ 방 열기</button>
@@ -390,12 +390,15 @@ function bindHome() {
   app.querySelector('[data-form="create-room"]')?.addEventListener("submit", (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const [directiveMin, directiveMax] = String(form.get("rangePreset")).split(",").map(Number);
+    const directiveValues = [
+      clamp(Math.round(Number(form.get("directiveMin"))), 1, 100),
+      clamp(Math.round(Number(form.get("directiveMax"))), 1, 100)
+    ].sort((a, b) => a - b);
     createRoom({
       totalRounds: Number(form.get("totalRounds")),
       roundSeconds: Number(form.get("roundSeconds")),
-      directiveMin,
-      directiveMax
+      directiveMin: directiveValues[0],
+      directiveMax: directiveValues[1]
     });
   });
 }
