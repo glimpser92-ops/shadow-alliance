@@ -20,8 +20,8 @@ const rules = [
   },
   {
     title: "욕심 VS 팀",
-    body: "승리한 연합 내부에서는 자신이 낸 숫자 비율만큼 세력을 나눠 가진다.",
-    formula: "10,000 × (내 숫자 ÷ 우리 팀 숫자 총합)"
+    body: "라운드마다 n이 무작위로 정해진다. 승리한 연합 안에서 높은 숫자 상위 n명은 0점 처리되고, 나머지가 자신이 낸 숫자 비율만큼 세력을 나눠 가진다.",
+    formula: "10,000 × (내 숫자 ÷ 랜덤 컷 제외 후 숫자 총합)"
   },
   {
     title: "갈등의 씨앗",
@@ -40,7 +40,9 @@ const simulation = {
       numbers: [30, 42, 60],
       average: 44,
       distance: 2,
-      gains: [2273, 3182, 4545]
+      gains: [4167, 5833, 0],
+      penaltyTargetCount: 1,
+      penaltyIndices: [2]
     },
     white: {
       numbers: [20, 70, 80],
@@ -69,7 +71,7 @@ const simulationSteps = [
   },
   {
     title: "승리팀 세력 분배",
-    body: "블랙 연합만 10,000 세력을 받는다. 블랙 안에서는 더 큰 숫자를 낸 공작원이 더 많은 세력을 가져간다.",
+    body: "이번 라운드의 랜덤 컷은 n=1이다. 블랙의 가장 큰 숫자 60은 0점 처리되고, 30과 42가 10,000 세력을 비율대로 나눠 가진다.",
     phase: "reward"
   },
   {
@@ -303,7 +305,13 @@ function simulationTeam(team, phase) {
             (number, index) => `
               <div class="sim-number">
                 <span>${number}</span>
-                ${showGains ? `<small>${data.gains[index].toLocaleString()} 세력</small>` : ""}
+                ${
+                  showGains
+                    ? `<small class="${data.penaltyIndices?.includes(index) ? "penalty-text" : ""}">
+                        ${data.penaltyIndices?.includes(index) ? "랜덤 컷 · " : ""}${data.gains[index].toLocaleString()} 세력
+                      </small>`
+                    : ""
+                }
               </div>
             `
           )
@@ -615,6 +623,9 @@ function studentChip(player) {
 function teacherResult() {
   const result = state.result;
   const winner = result?.winnerTeam ? TEAMS[result.winnerTeam] : null;
+  const penaltyMessage = result?.penalty
+    ? `이번 랜덤 컷 n=${result.penalty.targetCount}. 높은 숫자 ${result.penalty.values.join(", ")} 제출자 ${result.penalty.count}명은 0점 처리됩니다.`
+    : "이번 라운드 랜덤 컷 대상은 없습니다.";
   return `
     <section class="panel">
       <div class="eyebrow center">라운드 ${state.currentRound} 종료</div>
@@ -636,6 +647,7 @@ function teacherResult() {
             }
           </div>
           <p class="muted center">패배 연합의 숫자는 공개되지 않습니다.</p>
+          ${winner ? `<p class="penalty-note center">${penaltyMessage}</p>` : ""}
         </div>
         <div class="panel">
           <div class="eyebrow">현재 세력 순위 · TOP 5</div>
@@ -889,13 +901,20 @@ function studentResult() {
   const result = state.result;
   const winner = result?.winnerTeam ? TEAMS[result.winnerTeam] : null;
   const gain = state.personal?.lastGain || 0;
+  const personalPenalty = result?.penalty?.playerIds?.includes(state.personal?.id);
   return `
     <section class="panel student-focus">
       <div>
         <div class="eyebrow">이번 라운드 획득</div>
         <div class="giant">${gain > 0 ? `+${gain.toLocaleString()}` : "0"}</div>
         <p class="gold">세력</p>
-        <p class="muted">${winner ? `${winner.label}이 지령을 지배했습니다.` : "양 연합 모두 세력 변동이 없습니다."}</p>
+        <p class="${personalPenalty ? "penalty-text" : "muted"}">${
+          personalPenalty
+            ? "랜덤 컷 페널티로 이번 분배에서 제외되었습니다."
+            : winner
+              ? `${winner.label}이 지령을 지배했습니다.`
+              : "양 연합 모두 세력 변동이 없습니다."
+        }</p>
       </div>
     </section>
     <section class="panel">

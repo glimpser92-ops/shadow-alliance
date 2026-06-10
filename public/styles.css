@@ -1369,6 +1369,20 @@ select:disabled {
   color: var(--gold-2);
 }
 
+.penalty-text {
+  color: #ffd0ca !important;
+}
+
+.penalty-note {
+  margin: 14px auto 0;
+  max-width: 620px;
+  border: 1px solid rgba(226, 125, 115, 0.42);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  color: #ffd0ca;
+  background: rgba(226, 125, 115, 0.08);
+}
+
 .center {
   text-align: center;
 }
