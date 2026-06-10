@@ -90,6 +90,7 @@ let appConfig = null;
 let qrDataUrl = null;
 let qrForUrl = null;
 let soundOn = localStorage.getItem("shadow:sound") !== "off";
+let ambientAudio = null;
 let toastTimer = null;
 let ruleIndex = 0;
 let simulationIndex = 0;
@@ -149,9 +150,11 @@ socket.on("connect", () => {
 function render() {
   if (mode === "teacher") renderTeacher();
   if (mode === "student") renderStudent();
+  syncAmbientMusic();
 }
 
 function renderHome() {
+  syncAmbientMusic();
   const previous = getPreviousTeacherRoom();
   app.className = "app-shell";
   app.innerHTML = `
@@ -472,6 +475,7 @@ async function renderTeacher() {
     </main>
   `;
   bindTeacher();
+  syncAmbientMusic();
 }
 
 function teacherHeader() {
@@ -480,7 +484,7 @@ function teacherHeader() {
       <div class="brand brand-small">${sigil()} <span>SHADOW ALLIANCE</span></div>
       <div class="actions">
         <span class="pill">ROUND ${state.currentRound || 0} / ${state.settings.totalRounds}</span>
-        <button class="btn icon" title="사운드" data-action="sound">${soundOn ? "🔊" : "🔇"}</button>
+        <button class="btn icon" title="${soundButtonTitle()}" data-action="sound">${soundButtonLabel()}</button>
         <button class="btn ghost" data-action="home">처음으로</button>
       </div>
     </header>
@@ -672,7 +676,10 @@ function bindTeacher() {
     });
   });
   app.querySelectorAll('[data-action="start-round"]').forEach((button) => {
-    button.addEventListener("click", () => teacherEmit("teacher:startRound"));
+    button.addEventListener("click", () => {
+      primeAmbientMusic();
+      teacherEmit("teacher:startRound").then(() => primeAmbientMusic({ forcePulse: true }));
+    });
   });
   app.querySelector('[data-action="pause"]')?.addEventListener("click", () => teacherEmit("teacher:pause"));
   app.querySelector('[data-action="plus-time"]')?.addEventListener("click", () =>
@@ -1158,9 +1165,149 @@ function showStageTransition(event, nextState) {
 }
 
 function toggleSound() {
+  if (soundOn && shouldPlayAmbientMusic() && !isAmbientRunning()) {
+    primeAmbientMusic({ forcePulse: true });
+    showToast("배경음악을 시작했습니다.");
+    render();
+    return;
+  }
   soundOn = !soundOn;
   localStorage.setItem("shadow:sound", soundOn ? "on" : "off");
+  if (soundOn) {
+    primeAmbientMusic({ forcePulse: true });
+    showToast("배경음악과 효과음을 켰습니다.");
+  } else {
+    syncAmbientMusic();
+    showToast("사운드를 껐습니다.");
+  }
   render();
+}
+
+function soundButtonLabel() {
+  if (!soundOn) return "🔇";
+  if (shouldPlayAmbientMusic() && !isAmbientRunning()) return "🎵";
+  return "🔊";
+}
+
+function soundButtonTitle() {
+  if (!soundOn) return "사운드 켜기";
+  if (shouldPlayAmbientMusic() && !isAmbientRunning()) return "배경음악 시작";
+  return "사운드 끄기";
+}
+
+function isAmbientRunning() {
+  return Boolean(ambientAudio && ambientAudio.context.state === "running");
+}
+
+function shouldPlayAmbientMusic() {
+  return mode === "teacher" && soundOn && ["round", "result"].includes(state?.status);
+}
+
+function primeAmbientMusic(options = {}) {
+  if (!soundOn) return;
+  try {
+    const music = ensureAmbientMusic();
+    const resumeResult = music.context.state === "suspended" ? music.context.resume() : Promise.resolve();
+    syncAmbientMusic();
+    Promise.resolve(resumeResult).then(() => {
+      syncAmbientMusic();
+      if (options.forcePulse) playAmbientPulse({ force: true });
+    });
+  } catch {
+    // Background music is optional and may be blocked until the user interacts with the page.
+  }
+}
+
+function ensureAmbientMusic() {
+  if (ambientAudio) return ambientAudio;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContext) throw new Error("AudioContext is not supported.");
+
+  const context = new AudioContext();
+  const master = context.createGain();
+  const droneGain = context.createGain();
+  const filter = context.createBiquadFilter();
+  const lfo = context.createOscillator();
+  const lfoGain = context.createGain();
+
+  master.gain.value = 0.0001;
+  droneGain.gain.value = 0.08;
+  filter.type = "lowpass";
+  filter.frequency.value = 440;
+  filter.Q.value = 0.9;
+  lfo.frequency.value = 0.045;
+  lfoGain.gain.value = 120;
+
+  lfo.connect(lfoGain);
+  lfoGain.connect(filter.frequency);
+  droneGain.connect(filter);
+  filter.connect(master);
+  master.connect(context.destination);
+
+  const oscillators = [55, 82.41, 110].map((frequency, index) => {
+    const oscillator = context.createOscillator();
+    oscillator.type = index === 1 ? "sine" : "triangle";
+    oscillator.frequency.value = frequency;
+    oscillator.detune.value = index === 0 ? -7 : index === 2 ? 5 : 0;
+    oscillator.connect(droneGain);
+    oscillator.start();
+    return oscillator;
+  });
+  lfo.start();
+
+  ambientAudio = {
+    context,
+    master,
+    oscillators,
+    lfo,
+    step: 0,
+    pulseTimer: window.setInterval(playAmbientPulse, 1450)
+  };
+  return ambientAudio;
+}
+
+function syncAmbientMusic() {
+  if (!ambientAudio) return;
+  const context = ambientAudio.context;
+  const target = shouldPlayAmbientMusic() ? 0.14 : 0.0001;
+  try {
+    ambientAudio.master.gain.cancelScheduledValues(context.currentTime);
+    ambientAudio.master.gain.setTargetAtTime(target, context.currentTime, target > 0.001 ? 0.8 : 0.35);
+  } catch {
+    // Ignore audio automation failures.
+  }
+}
+
+function playAmbientPulse(options = {}) {
+  if (!ambientAudio || (!options.force && !shouldPlayAmbientMusic())) return;
+  const context = ambientAudio.context;
+  if (context.state !== "running") return;
+  const notes = [196, 185, 164.81, 146.83, 130.81, 146.83, 164.81, 185];
+  const frequency = notes[ambientAudio.step % notes.length];
+  ambientAudio.step += 1;
+
+  const pulse = context.createOscillator();
+  const pulseGain = context.createGain();
+  const delay = context.createDelay();
+  const echoGain = context.createGain();
+  const now = context.currentTime;
+
+  pulse.type = "sine";
+  pulse.frequency.setValueAtTime(frequency, now);
+  pulse.frequency.exponentialRampToValueAtTime(Math.max(40, frequency * 0.72), now + 0.62);
+  pulseGain.gain.setValueAtTime(0.0001, now);
+  pulseGain.gain.exponentialRampToValueAtTime(0.07, now + 0.04);
+  pulseGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+  delay.delayTime.value = 0.28;
+  echoGain.gain.value = 0.16;
+
+  pulse.connect(pulseGain);
+  pulseGain.connect(ambientAudio.master);
+  pulseGain.connect(delay);
+  delay.connect(echoGain);
+  echoGain.connect(ambientAudio.master);
+  pulse.start(now);
+  pulse.stop(now + 1.05);
 }
 
 function playTone(event) {
