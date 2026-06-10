@@ -96,6 +96,8 @@ let ruleIndex = 0;
 let simulationIndex = 0;
 let showSimulation = false;
 let sceneMotion = "";
+let submissionDraftValue = null;
+let submissionDraftRound = null;
 
 init();
 
@@ -137,6 +139,7 @@ function init() {
 }
 
 socket.on("room:state", ({ event, state: nextState }) => {
+  captureSubmissionDraftFromDom();
   state = nextState;
   if (event === "start" || event === "result" || event === "final") {
     sceneMotion = event;
@@ -783,6 +786,7 @@ function getJoinUrl(code) {
 }
 
 function renderStudent() {
+  captureSubmissionDraftFromDom();
   app.className = "app-shell student-shell";
   if (!state) {
     app.innerHTML = loading("잠입 중");
@@ -853,7 +857,7 @@ function studentLobby() {
 
 function studentRound() {
   const percent = Math.round((state.remainingMs / (state.settings.roundSeconds * 1000)) * 100);
-  const current = state.personal?.currentSubmission || 50;
+  const current = getSubmissionInputValue();
   return `
     <section class="panel directive ${timerUrgencyClass()}">
       <div class="eyebrow">중앙 본부 지령</div>
@@ -913,28 +917,76 @@ function bindStudent() {
   const range = app.querySelector('[data-input="range"]');
   const number = app.querySelector('[data-input="number"]');
   if (range && number) {
+    const saveDraft = (value) => {
+      submissionDraftValue = normalizeSubmissionValue(value);
+      submissionDraftRound = state.currentRound;
+      return submissionDraftValue;
+    };
     range.addEventListener("input", () => {
       number.value = range.value;
+      saveDraft(range.value);
+    });
+    range.addEventListener("change", () => {
+      number.value = range.value;
+      saveDraft(range.value);
     });
     number.addEventListener("input", () => {
-      const value = clamp(Number(number.value), 1, 100);
+      const value = saveDraft(number.value);
       range.value = value;
+      number.value = value;
+    });
+    number.addEventListener("change", () => {
+      const value = saveDraft(number.value);
+      range.value = value;
+      number.value = value;
     });
   }
   app.querySelector('[data-action="submit-number"]')?.addEventListener("click", () => {
     const input = app.querySelector('[data-input="number"]');
-    const value = clamp(Math.round(Number(input.value)), 1, 100);
-    input.value = value;
+    const value = normalizeSubmissionValue(input?.value ?? getSubmissionInputValue());
+    submissionDraftValue = value;
+    submissionDraftRound = state.currentRound;
+    if (input) input.value = value;
     emit("student:submit", {
       code: state.code,
       playerId,
       value
     }).then((payload) => {
       state = payload.state;
+      submissionDraftValue = value;
+      submissionDraftRound = state.currentRound;
       showToast(`${value} 제출 완료`);
       renderStudent();
     });
   });
+}
+
+function getSubmissionInputValue() {
+  if (submissionDraftRound === state?.currentRound && Number.isFinite(submissionDraftValue)) {
+    return submissionDraftValue;
+  }
+  submissionDraftRound = state?.currentRound || null;
+  submissionDraftValue = normalizeSubmissionValue(state?.personal?.currentSubmission || 50);
+  return submissionDraftValue;
+}
+
+function captureSubmissionDraftFromDom() {
+  if (mode !== "student" || state?.status !== "round") return;
+  const range = app.querySelector('[data-input="range"]');
+  const number = app.querySelector('[data-input="number"]');
+  const source =
+    document.activeElement === number
+      ? number
+      : document.activeElement === range
+        ? range
+        : number || range;
+  if (!source) return;
+  submissionDraftValue = normalizeSubmissionValue(source.value);
+  submissionDraftRound = state.currentRound;
+}
+
+function normalizeSubmissionValue(value) {
+  return clamp(Math.round(Number(value)), 1, 100);
 }
 
 function consumeSceneClass() {
