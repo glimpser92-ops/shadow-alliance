@@ -20,7 +20,7 @@ const rules = [
   },
   {
     title: "욕심 VS 팀",
-    body: "기본은 라운드마다 n이 무작위로 정해진다. 본부가 n을 직접 고정할 수도 있고, 승리한 연합 안에서 높은 숫자 상위 n명은 0점 처리된다.",
+    body: "기본은 라운드마다 n이 무작위로 정해진다. 본부가 n을 직접 고정할 수도 있고, 승리한 연합 안에서 높은 숫자 상위 n명은 0점 처리된다. 결과 공개 후에는 같은 승리 연합이 내부 투표로 보상을 과하게 가져간 공작원을 한 번 더 심판할 수 있다.",
     formula: "10,000 × (내 숫자 ÷ 컷 제외 후 숫자 총합)"
   },
   {
@@ -695,6 +695,7 @@ function teacherResult() {
           <div class="rank-list" style="margin-top:16px">${rankRows(state.top5)}</div>
         </div>
       </div>
+      ${teacherSanctionPanel()}
       <div class="actions" style="justify-content:center; margin-top:22px">
         ${
           state.currentRound >= state.settings.totalRounds
@@ -703,6 +704,49 @@ function teacherResult() {
         }
       </div>
     </section>
+  `;
+}
+
+function teacherSanctionPanel() {
+  const vote = state.sanctionVote;
+  if (!vote || !state.result?.winnerTeam) return "";
+  if (vote.applied?.applied) {
+    return `
+      <section class="panel sanction-panel">
+        <div class="stat-line">
+          <span class="gold">동맹 심판 집행</span>
+          <strong>${escapeHtml(vote.applied.targetNickname)} · ${vote.applied.confiscated.toLocaleString()} 세력 몰수</strong>
+        </div>
+        <p class="muted center">
+          ${vote.teamLabel} 내부 투표 ${vote.applied.votes}표로 이번 라운드 보상이 0점 처리되었습니다.
+        </p>
+      </section>
+    `;
+  }
+  return `
+    <section class="panel sanction-panel">
+      <div class="stat-line">
+        <span class="gold">동맹 심판 투표</span>
+        <strong>${vote.teamLabel} · ${vote.totalVotes}표 접수</strong>
+      </div>
+      ${
+        vote.candidates?.length
+          ? `<div class="sanction-grid">${vote.candidates.map(sanctionRow).join("")}</div>`
+          : `<p class="muted center">이번 라운드에는 투표로 처벌할 보상 대상이 없습니다.</p>`
+      }
+    </section>
+  `;
+}
+
+function sanctionRow(candidate) {
+  return `
+    <div class="sanction-row">
+      <div>
+        <strong>${escapeHtml(candidate.nickname)}</strong>
+        <span>제출 ${candidate.value} · 획득 ${candidate.gain.toLocaleString()} 세력</span>
+      </div>
+      <b>${candidate.votes} / ${candidate.needed || "-"} 표</b>
+    </div>
   `;
 }
 
@@ -974,10 +1018,65 @@ function studentResult() {
         }
       </div>
     </section>
+    ${studentSanctionVotePanel()}
     <section class="panel">
       <div class="eyebrow">현재 세력 순위 · TOP 5</div>
       <div class="rank-list" style="margin-top:16px">${rankRows(state.top5)}</div>
     </section>
+  `;
+}
+
+function studentSanctionVotePanel() {
+  const vote = state.sanctionVote;
+  if (!vote || state.personal?.team !== vote.team) return "";
+  if (vote.applied?.applied) {
+    const isMine = vote.applied.targetId === state.personal?.id;
+    return `
+      <section class="panel sanction-panel ${isMine ? "danger-glow" : ""}">
+        <div class="eyebrow">동맹 심판 집행</div>
+        <h3>${isMine ? "당신의 보상이 몰수되었습니다." : "팀 내부 처벌이 집행되었습니다."}</h3>
+        <p class="${isMine ? "penalty-text" : "muted"}">
+          ${escapeHtml(vote.applied.targetNickname)} · ${vote.applied.confiscated.toLocaleString()} 세력 몰수
+        </p>
+      </section>
+    `;
+  }
+  if (!vote.eligible) {
+    return `
+      <section class="panel sanction-panel">
+        <div class="eyebrow">동맹 심판 투표</div>
+        <p class="muted center">이번 라운드에는 당신이 행사할 수 있는 투표가 없습니다.</p>
+      </section>
+    `;
+  }
+  return `
+    <section class="panel sanction-panel">
+      <div class="stat-line">
+        <span class="gold">동맹 심판 투표</span>
+        <strong>${vote.totalVotes} / ${vote.eligibleVoterCount} 참여</strong>
+      </div>
+      <p class="muted center">같은 승리 연합 안에서 보상을 과하게 가져갔다고 생각되는 공작원을 지목할 수 있습니다.</p>
+      <div class="sanction-grid">
+        ${vote.candidates.map(studentSanctionCandidate).join("")}
+      </div>
+      ${
+        vote.selectedTargetId
+          ? `<button class="mini-btn sanction-abstain" data-action="sanction-vote" data-target-id="abstain">투표 철회</button>`
+          : ""
+      }
+    </section>
+  `;
+}
+
+function studentSanctionCandidate(candidate) {
+  return `
+    <button class="sanction-row sanction-choice ${candidate.selected ? "selected" : ""}" data-action="sanction-vote" data-target-id="${candidate.id}">
+      <span>
+        <strong>${escapeHtml(candidate.nickname)}</strong>
+        <small>제출 ${candidate.value} · 획득 ${candidate.gain.toLocaleString()} 세력</small>
+      </span>
+      <b>${candidate.votes} / ${candidate.needed || "-"} 표</b>
+    </button>
   `;
 }
 
@@ -1032,6 +1131,20 @@ function bindStudent() {
       submissionDraftRound = state.currentRound;
       showToast(`${value} 제출 완료`);
       renderStudent();
+    });
+  });
+  app.querySelectorAll('[data-action="sanction-vote"]').forEach((button) => {
+    button.addEventListener("click", () => {
+      const targetId = button.dataset.targetId;
+      emit("student:voteSanction", {
+        code: state.code,
+        playerId,
+        targetId
+      }).then((payload) => {
+        state = payload.state;
+        showToast(targetId === "abstain" ? "투표를 철회했습니다." : "동맹 심판 투표 완료");
+        renderStudent();
+      });
     });
   });
 }

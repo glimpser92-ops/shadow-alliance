@@ -6,6 +6,7 @@ const QRCode = require("qrcode");
 const { Server } = require("socket.io");
 
 const {
+  castSanctionVote,
   createRoom,
   disconnectPlayer,
   endRound,
@@ -151,6 +152,20 @@ io.on("connection", (socket) => {
     safeReply(reply, () => {
       const room = requireRoom(code);
       submitNumber(room, playerId, value);
+      broadcastRoom(room);
+      return {
+        state: serializeRoom(room, {
+          role: "student",
+          playerId
+        })
+      };
+    });
+  });
+
+  socket.on("student:voteSanction", ({ code, playerId, targetId } = {}, reply) => {
+    safeReply(reply, () => {
+      const room = requireRoom(code);
+      castSanctionVote(room, playerId, targetId);
       broadcastRoom(room);
       return {
         state: serializeRoom(room, {

@@ -116,6 +116,20 @@ function emit(socket, event, payload) {
         Object.values(ended.state.result.gains).reduce((sum, value) => sum + value, 0),
       10000
     );
+    const winningStudents = students.filter((student) => student.team === "black");
+    assert.ok(winningStudents.length >= 2);
+    const sanctionTarget = winningStudents[0];
+    let sanctionReply = null;
+    for (const voter of winningStudents.slice(1)) {
+      sanctionReply = await emit(voter.socket, "student:voteSanction", {
+        code,
+        playerId: voter.playerId,
+        targetId: sanctionTarget.playerId
+      });
+    }
+    assert.ok(sanctionReply.state.result.sanction.applied);
+    assert.strictEqual(sanctionReply.state.result.sanction.targetId, sanctionTarget.playerId);
+    assert.strictEqual(sanctionReply.state.result.gains[sanctionTarget.playerId], 0);
 
     const finalized = await emit(teacher, "teacher:finalize", { code, teacherToken });
     assert.strictEqual(finalized.state.status, "final");

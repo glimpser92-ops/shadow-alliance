@@ -3,6 +3,7 @@ const assert = require("assert");
 const {
   allocatePower,
   calculateRoundResult,
+  castSanctionVote,
   createRoom,
   endRound,
   excludeTeacherPlayer,
@@ -187,6 +188,52 @@ function withMathRandom(value, callback) {
   assert.strictEqual(result.gains[blackHigh.id], 0);
   assert.strictEqual(result.gains[blackTop.id], 0);
   assert.strictEqual(Object.values(result.gains).reduce((sum, value) => sum + value, 0), 10000);
+}
+
+{
+  const room = createRoom("SANCTION", {
+    directiveMin: 50,
+    directiveMax: 50,
+    roundSeconds: 300,
+    totalRounds: 5
+  });
+  const blackLow = joinRoom(room);
+  const blackMid = joinRoom(room);
+  const blackHigh = joinRoom(room);
+  const blackTopCut = joinRoom(room);
+  const white = joinRoom(room);
+  blackLow.team = "black";
+  blackMid.team = "black";
+  blackHigh.team = "black";
+  blackTopCut.team = "black";
+  white.team = "white";
+  withMathRandom(0, () => startRound(room));
+  setPenaltyTargetCount(room, 1);
+  submitNumber(room, blackLow.id, 40);
+  submitNumber(room, blackMid.id, 45);
+  submitNumber(room, blackHigh.id, 55);
+  submitNumber(room, blackTopCut.id, 60);
+  submitNumber(room, white.id, 100);
+
+  const result = endRound(room);
+
+  assert.strictEqual(result.winnerTeam, "black");
+  assert.strictEqual(result.gains[blackHigh.id], 3929);
+  assert.strictEqual(room.players[blackHigh.id].power, 3929);
+
+  castSanctionVote(room, blackLow.id, blackHigh.id);
+  assert.strictEqual(room.rounds[0].result.sanction, null);
+
+  const voteState = castSanctionVote(room, blackMid.id, blackHigh.id);
+  assert.strictEqual(voteState.applied.targetId, blackHigh.id);
+  assert.strictEqual(voteState.applied.votes, 2);
+  assert.strictEqual(voteState.applied.needed, 2);
+  assert.strictEqual(voteState.applied.confiscated, 3929);
+  assert.strictEqual(room.rounds[0].result.gains[blackHigh.id], 0);
+  assert.strictEqual(room.players[blackHigh.id].gains[1], 0);
+  assert.strictEqual(room.players[blackHigh.id].power, 0);
+  assert.strictEqual(room.players[blackLow.id].power, 2857);
+  assert.strictEqual(room.players[blackMid.id].power, 3214);
 }
 
 {

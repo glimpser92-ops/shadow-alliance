@@ -916,6 +916,84 @@ select:disabled {
   background: rgba(232, 199, 108, 0.15);
 }
 
+.sanction-panel {
+  margin-top: 18px;
+  border-color: rgba(232, 199, 108, 0.28);
+  background:
+    linear-gradient(135deg, rgba(232, 199, 108, 0.08), transparent 45%),
+    rgba(11, 11, 18, 0.82);
+}
+
+.sanction-panel h3 {
+  margin: 8px 0 10px;
+  color: var(--gold-2);
+  font-family: var(--font-display);
+  font-size: clamp(24px, 5vw, 34px);
+  text-align: center;
+}
+
+.sanction-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.sanction-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 66px;
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: rgba(6, 6, 10, 0.66);
+  color: var(--text);
+  text-align: left;
+}
+
+.sanction-row strong,
+.sanction-row span {
+  display: block;
+}
+
+.sanction-row span,
+.sanction-row small {
+  color: var(--muted);
+}
+
+.sanction-row b {
+  color: var(--gold-2);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.sanction-choice {
+  width: 100%;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.sanction-choice:hover,
+.sanction-choice.selected {
+  border-color: rgba(232, 199, 108, 0.72);
+  background: rgba(232, 199, 108, 0.12);
+}
+
+.sanction-choice:active {
+  transform: translateY(1px);
+}
+
+.sanction-abstain {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.danger-glow {
+  border-color: rgba(226, 125, 115, 0.62);
+  box-shadow: 0 0 26px rgba(226, 125, 115, 0.12);
+}
+
 .student-chip.done {
   border-color: rgba(143, 211, 161, 0.45);
   background: rgba(143, 211, 161, 0.05);
