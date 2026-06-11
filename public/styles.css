@@ -949,12 +949,17 @@ select:disabled {
   padding: 12px 14px;
   background: rgba(6, 6, 10, 0.66);
   color: var(--text);
+  font: inherit;
   text-align: left;
 }
 
 .sanction-row strong,
 .sanction-row span {
   display: block;
+}
+
+.sanction-row strong {
+  color: var(--text);
 }
 
 .sanction-row span,
